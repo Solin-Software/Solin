@@ -76,7 +76,7 @@ def meeting_folder_ui(request):
     assert bridge is not None, [error.toString() for error in component.errors()]
     bridge.setParent(widget)
     widget.rootContext().setContextProperty("controller", bridge)
-    widget.setSource(QUrl.fromLocalFile(str(REPO_ROOT / "src/solin/qml/MeetingDetailView.qml")))
+    widget.setSource(QUrl.fromLocalFile(str(REPO_ROOT / "src/solin/qml/Solin/MeetingDetailView.qml")))
     assert widget.errors() == []
     assert widget.rootObject() is not None
     widget.resize(820, 680)

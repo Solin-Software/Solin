@@ -166,6 +166,7 @@ jobs:
             python -m pytest \
               tests/e2e/test_packaged_app_smoke.py::test_packaged_app_survives_startup_window \
               tests/e2e/test_packaged_app_smoke.py::test_packaged_media_runtime \
+              tests/e2e/test_packaged_app_smoke.py::test_packaged_qml_runtime \
               tests/e2e/test_packaged_app_smoke.py::test_packaged_http_runtime -q
 
       - name: Download verified predecessor

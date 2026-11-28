@@ -130,7 +130,7 @@ def test_qml_onboarding_host_tracks_mouse_for_hover_and_cursor_state():
 
 
 def test_qml_onboarding_hotkey_capture_is_explicit_and_one_shot():
-    source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/OnboardingView.qml").read_text(encoding="utf-8")
 
     assert "property bool recording: false" in source
     assert "onboardingBridge.captureHotkey(event.key, event.modifiers)" in source
@@ -139,7 +139,7 @@ def test_qml_onboarding_hotkey_capture_is_explicit_and_one_shot():
 
 
 def test_qml_onboarding_language_sheet_uses_flickable_list_handlers():
-    source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/OnboardingView.qml").read_text(encoding="utf-8")
 
     assert "id: languageList" in source
     assert "TapHandler" in source
@@ -151,7 +151,7 @@ def test_qml_onboarding_language_sheet_uses_flickable_list_handlers():
 
 
 def test_qml_onboarding_manual_download_option_uses_explicit_label_and_icon():
-    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    qml_source = Path("src/solin/qml/Solin/OnboardingView.qml").read_text(encoding="utf-8")
     bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
     icons_source = Path("src/solin/styles/icons.py").read_text(encoding="utf-8")
 
@@ -162,7 +162,7 @@ def test_qml_onboarding_manual_download_option_uses_explicit_label_and_icon():
 
 
 def test_qml_onboarding_media_language_uses_media_icon():
-    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    qml_source = Path("src/solin/qml/Solin/OnboardingView.qml").read_text(encoding="utf-8")
     bridge_source = Path("src/solin/ui/qml/onboarding.py").read_text(encoding="utf-8")
     icons_source = Path("src/solin/styles/icons.py").read_text(encoding="utf-8")
 
@@ -172,7 +172,7 @@ def test_qml_onboarding_media_language_uses_media_icon():
 
 
 def test_qml_onboarding_places_congregation_choice_with_profile_name():
-    qml_source = Path("src/solin/qml/OnboardingView.qml").read_text(encoding="utf-8")
+    qml_source = Path("src/solin/qml/Solin/OnboardingView.qml").read_text(encoding="utf-8")
     profile_page = qml_source.split("id: profilePage", 1)[1].split("id: preferencesPage", 1)[0]
     preferences_page = qml_source.split("id: preferencesPage", 1)[1].split(
         "id: integrationsPage", 1

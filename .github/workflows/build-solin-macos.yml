@@ -110,15 +110,14 @@ jobs:
         id: version
         run: python scripts/release.py metadata --github-output
 
-      - name: Generate compiled QML cache
+      - name: Build Qt QML resource archive
         shell: bash
         run: |
-          rm -rf "${BUILD_DIR}/qmlcache/solin/qml"
-          python scripts/compile_qml_cache.py \
+          python scripts/package_qml_runtime.py \
             --source-dir src/solin/qml \
-            --output-dir "${BUILD_DIR}/qmlcache/solin/qml/Solin" \
-            --qt-qml-output-dir "${BUILD_DIR}/qmlcache/PySide6/qml" \
-            --qt-framework-output-dir "${BUILD_DIR}/qmlcache/qt-libs"
+            --archive "${BUILD_DIR}/qml-runtime/solin-qml.rcc" \
+            --qt-qml-output-dir "${BUILD_DIR}/qml-runtime/PySide6/qml" \
+            --qt-framework-output-dir "${BUILD_DIR}/qml-runtime/qt-libs"
 
       - name: Compile translation catalogs
         shell: bash
@@ -140,11 +139,11 @@ jobs:
           test -f "${SIDEVIEW_DYLIB}"
 
           qml_binary_args=()
-          if find "${BUILD_DIR}/qmlcache/PySide6/qml" -name "*.dylib" -print -quit | grep -q .; then
-            qml_binary_args+=("--include-data-files=${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml/=**/*.dylib")
+          if find "${BUILD_DIR}/qml-runtime/PySide6/qml" -name "*.dylib" -print -quit | grep -q .; then
+            qml_binary_args+=("--include-data-files=${BUILD_DIR}/qml-runtime/PySide6/qml=PySide6/qml/=**/*.dylib")
           fi
-          if find "${BUILD_DIR}/qmlcache/PySide6/qml" -name "*.so" -print -quit | grep -q .; then
-            qml_binary_args+=("--include-data-files=${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml/=**/*.so")
+          if find "${BUILD_DIR}/qml-runtime/PySide6/qml" -name "*.so" -print -quit | grep -q .; then
+            qml_binary_args+=("--include-data-files=${BUILD_DIR}/qml-runtime/PySide6/qml=PySide6/qml/=**/*.so")
           fi
 
           python -m nuitka \
@@ -178,8 +177,8 @@ jobs:
             --include-data-dir=src/solin/resources/assets=solin/resources/assets \
             --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \
             --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
-            --include-data-dir="${BUILD_DIR}/qmlcache/solin/qml/Solin=solin/qml/Solin" \
-            --include-data-dir="${BUILD_DIR}/qmlcache/PySide6/qml=PySide6/qml" \
+            --include-data-files="${BUILD_DIR}/qml-runtime/solin-qml.rcc=solin/qml/solin-qml.rcc" \
+            --include-data-dir="${BUILD_DIR}/qml-runtime/PySide6/qml=PySide6/qml" \
             "${qml_binary_args[@]}" \
             --include-data-files="${BUILD_DIR}/translations/macos/*.qm=solin/resources/translations/" \
             --include-data-files="${SIDEVIEW_DYLIB}=sideview/libsideview_native.dylib" \
@@ -235,7 +234,7 @@ jobs:
         run: |
           BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
           MACOS_DIR="$BUNDLE/Contents/MacOS"
-          QT_LIB_SOURCE="${BUILD_DIR}/qmlcache/qt-libs"
+          QT_LIB_SOURCE="${BUILD_DIR}/qml-runtime/qt-libs"
           test -d "$QT_LIB_SOURCE"
 
           while IFS= read -r library; do
@@ -294,24 +293,16 @@ jobs:
             exit 1
           fi
 
-      - name: Verify compiled QML deployment
+      - name: Verify QML deployment
         shell: bash
         run: |
           BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
-          find "$BUNDLE" -path "*/solin/qml/*.qmlc" -not -path "*/solin/qml/Solin/*" -delete
-          find "$BUNDLE" -path "*/solin/qml/*.qml" -not -path "*/solin/qml/Solin/*" -delete
-          find "$BUNDLE" -path "*/solin/qml/qmldir" -delete
-          if ! find "$BUNDLE" -path "*/solin/qml/Solin/*.qmlc" -print -quit | grep -q .; then
-            echo "::error::Compiled QML cache files were not packaged in the app bundle."
+          if ! find "$BUNDLE" -type f -path "*/solin/qml/solin-qml.rcc" -print -quit | grep -q .; then
+            echo "::error::Solin QML resource archive was not packaged in the app bundle."
             exit 1
           fi
-          find "$BUNDLE" -path "*/solin/qml/Solin/*.qml" -delete
-          if ! find "$BUNDLE" -path "*/solin/qml/Solin/qmldir" -print -quit | grep -q .; then
-            echo "::error::Compiled QML qmldir metadata was not packaged in the app bundle."
-            exit 1
-          fi
-          if find "$BUNDLE" -path "*/solin/qml/Solin/*.qml" -print -quit | grep -q .; then
-            echo "::error::Raw QML source files remained in the app bundle."
+          if find "$BUNDLE" -type f -path "*/solin/qml/*" ! -name "solin-qml.rcc" -print -quit | grep -q .; then
+            echo "::error::Unexpected loose Solin QML files in the app bundle."
             exit 1
           fi
           if ! find "$BUNDLE" -path "*/PySide6/qml/QtQuick/qmldir" -print -quit | grep -q .; then
@@ -412,7 +403,7 @@ jobs:
             printf '%s\n' "${missing[@]}" | sed 's/^/::error::Unnormalized Qt framework dependency: /'
             exit 1
           fi
-          echo "App QML packaged as compiled .qmlc cache only."
+          echo "Solin QML resource archive verified."
 
       - name: Stage and qualify packaged libobs runtime
         shell: bash

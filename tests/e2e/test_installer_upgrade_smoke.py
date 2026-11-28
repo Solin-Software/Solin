@@ -22,6 +22,7 @@ from tests.e2e._packaged_app import (
     skip_if_solin_registry_exists,
 )
 from tests.e2e._http_runtime import assert_packaged_http_runtime
+from tests.e2e._qml_runtime import assert_packaged_qml_runtime
 from tests.e2e._windows_process import run_windows_process_tree
 
 
@@ -376,6 +377,10 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
                 path = obsolete_engine / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"retired engine payload")
+            legacy_qml = install_dir / "solin" / "qml" / "Solin"
+            # Exercise the migration even when the selected predecessor already ships RCC.
+            legacy_qml.mkdir(parents=True, exist_ok=True)
+            (legacy_qml / "qmldir").touch(exist_ok=True)
             unrelated_file = install_dir / "user-kept.txt"
             unrelated_file.write_text("user-owned file", encoding="utf-8")
             unrelated_native = install_dir / "native" / "user-kept.dll"
@@ -384,9 +389,11 @@ def test_full_installer_upgrade_preserves_user_state() -> None:
             _run_installer(new_installer, install_dir, env, "user")
             assert not obsolete_extension.exists(), "obsolete Python extension survived upgrade"
             assert not obsolete_engine.exists(), "retired media-engine payload survived upgrade"
+            assert not legacy_qml.exists(), "retired QML module survived upgrade"
             assert unrelated_file.read_text(encoding="utf-8") == "user-owned file"
             assert unrelated_native.read_bytes() == b"user-owned native file"
             assert_packaged_http_runtime(install_dir / _APP_EXE, env=env)
+            assert_packaged_qml_runtime(install_dir / _APP_EXE, env=env)
             _assert_camera_registered(env, "user")
             registration_paths = _camera_registration_paths("user")
             for architecture, managed_filter in registration_paths.items():

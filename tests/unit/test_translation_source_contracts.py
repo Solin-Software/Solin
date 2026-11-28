@@ -67,7 +67,7 @@ def test_scene_source_workflow_messages_have_completed_translations(catalog: Pat
         for filename in _SCENE_WORKFLOW_QML
         for match in re.finditer(
             r'qsTr\(\s*("(?:[^"\\]|\\.)*")',
-            (_SOURCE_ROOT / "qml" / filename).read_text(encoding="utf-8"),
+            (_SOURCE_ROOT / "qml" / "Solin" / filename).read_text(encoding="utf-8"),
         )
     } - stream_credential_sources
     bridge_tree = ast.parse(

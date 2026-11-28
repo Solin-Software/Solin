@@ -1955,7 +1955,7 @@ def _timer_pointer_host(request, offset: QPoint, *, root_control: bool = False):
         return host, widget, button, probe
     # Production timer controls live inside a page, rather than occupying the
     # whole native view. Keep view crossings outside the control's hit rectangle.
-    url = QUrl.fromLocalFile(str(REPO_ROOT / "src/solin/qml/TimerInputTest.qml"))
+    url = QUrl.fromLocalFile(str(REPO_ROOT / "src/solin/qml/Solin/TimerInputTest.qml"))
     component = QQmlComponent(widget.engine(), widget)
     component.setData(b'''
         import QtQuick

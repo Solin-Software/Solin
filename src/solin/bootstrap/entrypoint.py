@@ -16,6 +16,11 @@ def run() -> None:
     """Dispatch the process role before importing application services or Qt."""
 
     arguments = sys.argv[1:]
+    if any(argument.split("=", 1)[0] == "--verify-qml-runtime" for argument in arguments):
+        from .qml_runtime_verification import main as verify_qml_runtime
+
+        raise SystemExit(verify_qml_runtime(arguments))
+
     if any(argument.split("=", 1)[0] == "--verify-macos-runtime" for argument in arguments):
         from .macos_runtime_verification import main as verify_macos_runtime
 

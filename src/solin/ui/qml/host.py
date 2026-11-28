@@ -15,7 +15,7 @@ from shiboken6 import isValid
 
 from solin.styles.theme import PALETTE, QML_THEME
 from solin.ui.helpers import QmlPointerCursorState
-from solin.ui.qml.loader import QmlLoadHandle
+from solin.ui.qml.loader import QML_MODULE_URI, QmlLoadHandle
 
 _QML_CONTROLS_STYLE = "Basic"
 
@@ -249,6 +249,7 @@ def configure_qml_host(
     *,
     type_name: str,
     clear_color: QColor | str,
+    module_uri: str = QML_MODULE_URI,
     context_properties: Mapping[str, Any] | None = None,
     image_providers: Mapping[str, Any] | None = None,
     mouse_tracking: bool = False,
@@ -291,7 +292,7 @@ def configure_qml_host(
 
     if resize_to_root:
         widget.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
-    handle = QmlLoadHandle(widget, type_name, asynchronous=defer_load)
+    handle = QmlLoadHandle(widget, module_uri, type_name, asynchronous=defer_load)
     if not defer_load:
         handle.start()
     return handle

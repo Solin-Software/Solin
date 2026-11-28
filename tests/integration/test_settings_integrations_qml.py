@@ -360,7 +360,7 @@ def dialog_window(setup_domain):
     engine.loadData(
         b'import QtQuick; import QtQuick.Controls; '
         b'ApplicationWindow { width: 360; height: 440; visible: true; SettingsShortcutDialog {} }',
-        QUrl.fromLocalFile(str(Path("src/solin/qml/ShortcutTest.qml").resolve())),
+        QUrl.fromLocalFile(str(Path("src/solin/qml/Solin/ShortcutTest.qml").resolve())),
     )
     QApplication.processEvents()
     assert engine.rootObjects(), errors

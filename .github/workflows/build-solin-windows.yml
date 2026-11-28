@@ -122,15 +122,14 @@ jobs:
             }
           }
 
-      - name: Generate compiled QML cache
+      - name: Build Qt QML resource archive
         shell: pwsh
         run: |
-          Remove-Item -LiteralPath "$env:BUILD_DIR\qmlcache\solin\qml" -Recurse -Force -ErrorAction SilentlyContinue
-          python scripts\compile_qml_cache.py `
+          python scripts\package_qml_runtime.py `
             --source-dir "src\solin\qml" `
-            --output-dir "$env:BUILD_DIR\qmlcache\solin\qml\Solin" `
-            --qt-qml-output-dir "$env:BUILD_DIR\qmlcache\PySide6\qml" `
-            --qt-library-output-dir "$env:BUILD_DIR\qmlcache\qt-libs" `
+            --archive "$env:BUILD_DIR\qml-runtime\solin-qml.rcc" `
+            --qt-qml-output-dir "$env:BUILD_DIR\qml-runtime\PySide6\qml" `
+            --qt-library-output-dir "$env:BUILD_DIR\qml-runtime\qt-libs" `
             --qt-qml-module "QtQuick/Controls/impl" `
             --qt-qml-module "QtQuick/Controls/Basic/impl"
 
@@ -190,10 +189,10 @@ jobs:
             --include-data-dir="src\solin\resources\assets=solin/resources/assets" `
             --include-data-dir="src\solin\resources\remote_control=solin/resources/remote_control" `
             --include-data-dir="src\solin\resources\translations\locales=solin/resources/translations/locales" `
-            --include-data-dir="$env:BUILD_DIR\qmlcache\solin\qml\Solin=solin/qml/Solin" `
-            --include-data-dir="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml" `
-            --include-data-files="$env:BUILD_DIR\qmlcache\PySide6\qml=PySide6/qml/=**/*.dll" `
-            --include-data-files="$env:BUILD_DIR\qmlcache\qt-libs\*.dll=./" `
+            --include-data-files="$env:BUILD_DIR\qml-runtime\solin-qml.rcc=solin/qml/solin-qml.rcc" `
+            --include-data-dir="$env:BUILD_DIR\qml-runtime\PySide6\qml=PySide6/qml" `
+            --include-data-files="$env:BUILD_DIR\qml-runtime\PySide6\qml=PySide6/qml/=**/*.dll" `
+            --include-data-files="$env:BUILD_DIR\qml-runtime\qt-libs\*.dll=./" `
             --include-data-files="$env:BUILD_DIR/translations/windows/*.qm=solin/resources/translations/" `
             --include-data-files="$sideviewDll=sideview/sideview_native.dll" `
             --enable-plugin=pyside6 `
@@ -252,23 +251,12 @@ jobs:
             }
           }
 
-          Get-ChildItem -LiteralPath (Join-Path $dist "solin\qml") -Filter "*.qmlc" -File -ErrorAction SilentlyContinue |
-            Remove-Item -Force
-          Get-ChildItem -LiteralPath (Join-Path $dist "solin\qml") -Filter "*.qml" -File -ErrorAction SilentlyContinue |
-            Remove-Item -Force
-          Remove-Item -LiteralPath (Join-Path $dist "solin\qml\qmldir") -Force -ErrorAction SilentlyContinue
-
-          $qmlDir = Join-Path $dist "solin\qml\Solin"
-          if (-not (Test-Path (Join-Path $qmlDir "*.qmlc"))) {
-            throw "Compiled QML cache files were not packaged in $qmlDir"
+          $qmlDir = Join-Path $dist "solin\qml"
+          if (-not (Test-Path -LiteralPath (Join-Path $qmlDir "solin-qml.rcc") -PathType Leaf)) {
+            throw "Solin QML resource archive was not packaged in $qmlDir."
           }
-          Get-ChildItem -LiteralPath $qmlDir -Filter "*.qml" -File |
-            Remove-Item -Force
-          if (-not (Test-Path (Join-Path $qmlDir "qmldir"))) {
-            throw "Compiled QML qmldir metadata was not packaged in $qmlDir"
-          }
-          if (Test-Path (Join-Path $qmlDir "*.qml")) {
-            throw "Raw QML source files remained in $qmlDir"
+          if (Get-ChildItem -LiteralPath $qmlDir -Recurse -File | Where-Object Name -ne "solin-qml.rcc") {
+            throw "Unexpected loose QML files in $qmlDir."
           }
           if (-not (Test-Path (Join-Path $dist "PySide6\qml\QtQuick\qmldir"))) {
             throw "QtQuick QML runtime was not packaged."
@@ -309,7 +297,7 @@ jobs:
           if (-not (Test-Path (Join-Path $dist "Qt6QuickTemplates2.dll"))) {
             throw "Qt6QuickTemplates2.dll was not packaged."
           }
-          Write-Host "App QML packaged as compiled .qmlc cache only."
+          Write-Host "Solin QML resource archive verified."
 
       - name: Build full installer with Inno Setup
         shell: pwsh

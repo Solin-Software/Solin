@@ -413,7 +413,7 @@ def test_precise_transform_constructs_without_bridge_warnings(qt_object_owner) -
     warnings = []
     engine.warnings.connect(lambda errors: warnings.extend(error.toString() for error in errors))
     component = QQmlComponent(engine, QUrl.fromLocalFile(str(
-        REPO_ROOT / "src/solin/qml/ScenesTransformDialog.qml",
+        REPO_ROOT / "src/solin/qml/Solin/ScenesTransformDialog.qml",
     )), engine)
     assert component.status() == QQmlComponent.Status.Ready, component.errorString()
     dialog = component.create()
@@ -952,7 +952,7 @@ def test_transition_duration_fields_apply_uncommitted_text_and_persist(
 
 
 def test_scene_qml_sources_describe_both_reorder_ghosts_and_responsive_drawer() -> None:
-    qml_dir = Path("src/solin/qml")
+    qml_dir = Path("src/solin/qml/Solin")
     scene_panel = (qml_dir / "ScenesScenePanel.qml").read_text(encoding="utf-8")
     source_panel = (qml_dir / "ScenesSourcePanel.qml").read_text(encoding="utf-8")
     workspace = (qml_dir / "ScenesWorkspace.qml").read_text(encoding="utf-8")
@@ -1073,7 +1073,7 @@ def test_scene_and_source_drag_handles_update_the_native_cursor(
 
 
 def test_scene_qml_attaches_ptz_keys_to_an_item() -> None:
-    ptz_popup = Path("src/solin/qml/ScenesPtzPopup.qml").read_text(encoding="utf-8")
+    ptz_popup = Path("src/solin/qml/Solin/ScenesPtzPopup.qml").read_text(encoding="utf-8")
 
     assert "contentItem: FocusScope" in ptz_popup
     assert "Keys.onPressed" in ptz_popup

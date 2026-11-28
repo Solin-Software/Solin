@@ -22,6 +22,7 @@ def test_upgrade_cleanup_is_scoped_to_installer_owned_retired_payloads() -> None
     assert set(entries) == {
         'Type: filesandordirs; Name: "{app}\\backports"',
         'Type: filesandordirs; Name: "{app}\\native\\media-engine"',
+        'Type: filesandordirs; Name: "{app}\\solin\\qml\\Solin"',
     }
 
 
@@ -54,6 +55,11 @@ def test_silent_reinstall_preserves_files_in_existing_directory(tmp_path: Path) 
     obsolete_extension = install / "backports" / "zstd" / "obsolete.pyd"
     obsolete_extension.parent.mkdir(parents=True)
     obsolete_extension.write_bytes(b"retired optional extension")
+    legacy_qml = install / "solin" / "qml" / "Solin"
+    legacy_qml.mkdir(parents=True)
+    (legacy_qml / "qmldir").write_text("module Solin\n", encoding="utf-8")
+    (legacy_qml / "qml-manifest.json").write_text("{}", encoding="utf-8")
+    (legacy_qml / "q_legacy.qmlc").write_bytes(b"retired QML bytecode")
     preserved = {}
     for base, relatives in (
         (
@@ -62,6 +68,7 @@ def test_silent_reinstall_preserves_files_in_existing_directory(tmp_path: Path) 
                 "native/virtual-camera/x64/solin-virtual-camera.dll",
                 "native/virtual-camera/x86/solin-virtual-camera.dll",
                 "native/user-kept.dll",
+                "solin/qml/user-kept.txt",
             ),
         ),
         (
@@ -87,6 +94,8 @@ def test_silent_reinstall_preserves_files_in_existing_directory(tmp_path: Path) 
             preserved[path] = content
     payload = tmp_path / "Solin.exe"
     payload.write_bytes(b"private fixture payload")
+    qml_archive = tmp_path / "solin-qml.rcc"
+    qml_archive.write_bytes(b"Qt resource archive fixture")
     recipe = f"""#define MyAppExeName "Solin.exe"
 [Setup]
 AppName=Private Directory Contract
@@ -104,6 +113,7 @@ OutputBaseFilename=probe
 {_install_delete_section(setup)}
 [Files]
 Source: "Solin.exe"; DestDir: "{{app}}"
+Source: "solin-qml.rcc"; DestDir: "{{app}}\\solin\\qml"
 [Code]
 {handler}
 """
@@ -127,5 +137,7 @@ Source: "Solin.exe"; DestDir: "{{app}}"
     assert sentinel.read_text(encoding="utf-8") == "user-owned file"
     assert not obsolete_engine.exists(), "retired media-engine payload survived upgrade"
     assert not obsolete_extension.exists(), "retired Python extension survived upgrade"
+    assert not legacy_qml.exists(), "retired QML module survived upgrade"
+    assert (install / "solin/qml/solin-qml.rcc").read_bytes() == qml_archive.read_bytes()
     for path, content in preserved.items():
         assert path.read_bytes() == content, f"upgrade cleanup changed {path.relative_to(tmp_path)}"

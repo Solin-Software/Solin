@@ -35,7 +35,7 @@
         <translation>Uzito (0–100): uzito wa juu hupokea marekebisho zaidi. Uzito wa 0 huacha sehemu bila kubadilika wakati sehemu nyingine ina uzito chanya. Ikiwa uzito wote ni 0, sehemu zinazostahili hurekebishwa kwa usawa.</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+120"/>
         <location line="+199"/>
         <source>Clock</source>
         <translation>Saa</translation>
@@ -243,7 +243,7 @@
         <translation>Hakuna skrini za pili zilizotambuliwa</translation>
     </message>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="+193"/>
         <source>Stop the running timer before switching schedules.</source>
         <translation>Simamisha kipima muda kinachoendelea kabla ya kubadilisha ratiba.</translation>
     </message>
@@ -311,7 +311,7 @@
         <location line="+59"/>
         <location line="+5"/>
         <location line="+172"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+581"/>
         <source>New schedule</source>
         <translation>Ratiba mpya</translation>
     </message>
@@ -322,7 +322,7 @@
     </message>
     <message>
         <location line="+24"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+738"/>
         <source>Edit schedule</source>
         <translation>Hariri ratiba</translation>
     </message>
@@ -368,20 +368,20 @@
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+1118"/>
         <source>Duplicate</source>
         <translation>Nakili</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+70"/>
         <source>Reset results</source>
         <translation>Weka upya matokeo</translation>
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-34"/>
         <source>Delete</source>
         <translation>Futa</translation>
     </message>
@@ -402,8 +402,8 @@
         <translation>Hamisha PDF</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-193"/>
         <source>Part</source>
         <translation>Sehemu</translation>
     </message>
@@ -434,7 +434,7 @@
     </message>
     <message>
         <location line="+345"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+306"/>
         <location line="+354"/>
         <source>Delete part</source>
         <translation>Futa sehemu</translation>
@@ -451,18 +451,18 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-222"/>
         <source>Add part to section</source>
         <translation>Ongeza sehemu kwenye kifungu</translation>
     </message>
     <message>
         <location line="+18"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+49"/>
         <source>Delete section</source>
         <translation>Futa kifungu</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>Monitor inatumiwa na media</translation>
     </message>
@@ -473,8 +473,8 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1026"/>
         <location line="+130"/>
         <location line="+66"/>
         <location line="+48"/>
@@ -490,7 +490,7 @@
         <translation>Ghairi</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="-239"/>
         <source>Projected %1 min behind</source>
         <translation>Inakadiriwa kuchelewa kwa dak %1</translation>
     </message>
@@ -547,7 +547,7 @@
     <message>
         <location line="+82"/>
         <location line="+540"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-66"/>
         <source>Edit part…</source>
         <translation>Hariri sehemu…</translation>
     </message>
@@ -567,7 +567,7 @@
     </message>
     <message>
         <location line="-404"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-164"/>
         <source>Target %1</source>
         <translation>Lengo %1</translation>
     </message>
@@ -589,7 +589,7 @@
         <location line="-316"/>
         <location line="+312"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+145"/>
         <source>Restart</source>
         <translation>Anza upya</translation>
     </message>
@@ -597,7 +597,7 @@
         <location line="-314"/>
         <location line="+309"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+1"/>
         <source>Start</source>
         <translation>Anza</translation>
     </message>
@@ -610,14 +610,14 @@
     <message>
         <location line="-372"/>
         <location line="+408"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1405"/>
         <source>Reset</source>
         <translation>Weka upya</translation>
     </message>
     <message>
         <location line="-405"/>
         <location line="+406"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+9"/>
         <source>Reset this part</source>
         <translation>Weka upya sehemu hii</translation>
     </message>
@@ -695,7 +695,7 @@
         <translation>Inayofuata</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-56"/>
         <source>Editing: %1</source>
         <translation>Inahariri: %1</translation>
     </message>
@@ -707,7 +707,7 @@
     <message>
         <location line="+13"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+423"/>
         <location line="+56"/>
         <source>Add section</source>
         <translation>Ongeza kifungu</translation>
@@ -715,14 +715,14 @@
     <message>
         <location line="+9"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-172"/>
         <location line="+70"/>
         <source>Add part</source>
         <translation>Ongeza sehemu</translation>
     </message>
     <message>
         <location line="+25"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-350"/>
         <location line="+195"/>
         <location line="+48"/>
         <location line="+482"/>
@@ -792,7 +792,7 @@
         <translation>Kifungu tupu — buruta sehemu hapa au bofya +</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1475"/>
         <source>%1 (copy)</source>
         <translation>%1 (nakala)</translation>
     </message>
@@ -1106,7 +1106,7 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Njia ya Mkato ya Kiotomatiki</translation>
     </message>
@@ -1804,7 +1804,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1749"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1749"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + sogeza gurudumu ili kukuza · Buruta ili kusogeza picha</translation>
     </message>
@@ -1884,7 +1884,7 @@
         <translation>Inapakia</translation>
     </message>
     <message>
-        <location filename="../../qml/JWMediaCatalogModal.qml" line="+40"/>
+        <location filename="../../qml/Solin/JWMediaCatalogModal.qml" line="+40"/>
         <source>All</source>
         <translation>Zote</translation>
     </message>
@@ -1934,7 +1934,7 @@
         <translation>Hakuna video zilizopatikana</translation>
     </message>
     <message>
-        <location filename="../../qml/MediaPlacementOverlay.qml" line="+85"/>
+        <location filename="../../qml/Solin/MediaPlacementOverlay.qml" line="+85"/>
         <source>Where to add?</source>
         <translation>Iongezwe wapi?</translation>
     </message>
@@ -1947,7 +1947,7 @@
 <context>
     <name>JWSongsBridge</name>
     <message>
-        <location filename="../../qml/JWSongsModal.qml" line="+145"/>
+        <location filename="../../qml/Solin/JWSongsModal.qml" line="+145"/>
         <source>Add video song</source>
         <translation>Ongeza wimbo wa video</translation>
     </message>
@@ -2650,7 +2650,7 @@
 <context>
     <name>MediaCountdownPage</name>
     <message>
-        <location filename="../../qml/MediaCountdownPage.qml" line="+93"/>
+        <location filename="../../qml/Solin/MediaCountdownPage.qml" line="+93"/>
         <source>Tomorrow at %1</source>
         <translation>Kesho saa %1</translation>
     </message>
@@ -2909,7 +2909,7 @@
 <context>
     <name>MediaDestinationDialog</name>
     <message>
-        <location filename="../../qml/MediaDestinationDialog.qml" line="+77"/>
+        <location filename="../../qml/Solin/MediaDestinationDialog.qml" line="+77"/>
         <source>Back</source>
         <translation>Nyuma</translation>
     </message>
@@ -3056,7 +3056,7 @@
     </message>
     <message>
         <location line="+9"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1156"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1156"/>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
     </message>
@@ -3066,7 +3066,7 @@
         <translation>Jaribu tena</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1383"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1383"/>
         <source>Play</source>
         <translation>Cheza</translation>
     </message>
@@ -3432,7 +3432,7 @@ Solin itaendelea kujaribu kuunganisha tena kutoka mahali ilipoishia.
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
+        <location filename="../../qml/Solin/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Media hii haipatikani kwa ajili ya kuhaririwa.</translation>
     </message>
@@ -3454,7 +3454,7 @@ Solin itaendelea kujaribu kuunganisha tena kutoka mahali ilipoishia.
     </message>
     <message>
         <location line="+93"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+28"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+28"/>
         <source>Start and end times</source>
         <translation>Muda wa kuanza na kumaliza</translation>
     </message>
@@ -3517,7 +3517,7 @@ Solin itaendelea kujaribu kuunganisha tena kutoka mahali ilipoishia.
 <context>
     <name>MeetingCanonicalRestore</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+142"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+142"/>
         <location filename="../../widgets/meetings/tree_controller.py" line="+249"/>
         <source>Restore official meeting content</source>
         <translation>Rejesha maudhui rasmi ya mkutano</translation>
@@ -4171,7 +4171,7 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
 <context>
     <name>OnboardingView</name>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+96"/>
         <source>Cancel</source>
         <translation>Ghairi</translation>
     </message>
@@ -4519,7 +4519,7 @@ Folda na faili zake zinazoonekana zitahifadhiwa.</translation>
         <translation type="vanished">Siku na saa za mikutano zinatoka jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+64"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Ondoa kutaniko</translation>
     </message>
@@ -5451,13 +5451,13 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
 <context>
     <name>PlaylistTransferDialog</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+131"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-64"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+131"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-64"/>
         <source>Cancel</source>
         <translation>Ghairi</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+12"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+12"/>
         <source>Retry</source>
         <translation>Jaribu tena</translation>
     </message>
@@ -5596,7 +5596,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
 <context>
     <name>PlaylistTreeView</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+66"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+66"/>
         <source>Rename</source>
         <translation>Badilisha jina</translation>
     </message>
@@ -6466,7 +6466,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation type="vanished">Sanidi kifaa</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Media</source>
         <translation>Sanidi Solin Media</translation>
     </message>
@@ -7391,7 +7391,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
+        <location filename="../../qml/Solin/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Hariri kamera</translation>
     </message>
@@ -7402,14 +7402,14 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+275"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+275"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+10"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>Jina</translation>
     </message>
@@ -7532,12 +7532,12 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="+694"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+94"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1047"/>
         <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
@@ -7547,22 +7547,22 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>Hifadhi</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Inasubiri fremu ya kwanza</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Panga fremu…</translation>
     </message>
@@ -7587,7 +7587,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Tumia upangaji wa fremu (Enter)</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-303"/>
         <source>Back to sources</source>
         <translation>Rudi kwenye vyanzo</translation>
     </message>
@@ -7705,7 +7705,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
     </message>
     <message>
         <location line="+2"/>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="+185"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="+185"/>
         <source>Zoom</source>
         <translation>Zoom</translation>
     </message>
@@ -7766,7 +7766,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Futa</translation>
@@ -7777,7 +7777,7 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Ongeza</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="-97"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="-97"/>
         <source>PTZ controls are unavailable for this Solin installation.</source>
         <translation>Vidhibiti vya PTZ havipatikani katika usakinishaji huu wa Solin.</translation>
     </message>
@@ -7842,8 +7842,8 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Inaelekeza kamera…</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location filename="../../qml/Solin/ScenesScenePanel.qml" line="+172"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1193"/>
         <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -7855,8 +7855,8 @@ Mpangilio wa sasa na faili zitahifadhiwa. Mabadiliko yanayosubiri kutoka kwenye 
         <translation>Mandhari</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesSourcePanel.qml" line="+159"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-84"/>
+        <location filename="../../qml/Solin/ScenesSourcePanel.qml" line="+159"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-84"/>
         <location line="+86"/>
         <source>Sources</source>
         <translation>Vyanzo</translation>
@@ -7909,7 +7909,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Vidhibiti vya PTZ</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="-33"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="-33"/>
         <source>Precise transform</source>
         <translation>Ubadilishaji sahihi</translation>
     </message>
@@ -7949,7 +7949,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Mzunguko</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>Fungua mandhari</translation>
     </message>
@@ -8064,14 +8064,14 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>ms</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-436"/>
         <location line="+449"/>
         <source>Apply</source>
         <translation>Tumia</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Badilisha jina…</translation>
     </message>
@@ -8334,19 +8334,19 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Utoaji · %1</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <location filename="../../qml/Solin/ScenesRecordingPopover.qml" line="+112"/>
         <source>Recording</source>
         <translation>Kurekodi</translation>
     </message>
     <message>
         <location line="+58"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-166"/>
         <source>Record</source>
         <translation>Rekodi</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-61"/>
         <source>Stop recording</source>
         <translation>Acha kurekodi</translation>
     </message>
@@ -8357,19 +8357,19 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+58"/>
         <source>Starting…</source>
         <translation>Inaanza…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1"/>
         <source>Finishing…</source>
         <translation>Inakamilisha…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-55"/>
         <source>Start recording</source>
         <translation>Anza kurekodi</translation>
     </message>
@@ -8725,7 +8725,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+115"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Mipangilio</translation>
     </message>
@@ -8860,7 +8860,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Folda ya usawazishaji (Dropbox, OneDrive, n.k.) inayoonyeshwa kama orodha za kucheza.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+264"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Chagua…</translation>
     </message>
@@ -9013,7 +9013,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation type="vanished">Unda njia moja au zaidi za mkato kwa ajili ya matukio ya kuanza, kumaliza, kusitisha, na kuendeleza.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+68"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Hakuna njia za mkato zilizosanidiwa.</translation>
     </message>
@@ -9023,7 +9023,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Ongeza njia ya mkato</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-7"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Hariri</translation>
     </message>
@@ -9067,7 +9067,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Hifadhi mabadiliko</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsPage.qml" line="+184"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Programu ya Sauti na Video kwa ajili ya mikutano ya Jumba la Ufalme.</translation>
     </message>
@@ -9087,13 +9087,13 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Programu hii inajitegemea na haishirikiani na wala kuidhinishwa na Watch Tower Bible and Tract Society of Pennsylvania au mashirika yake yoyote yanayohusiana.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location filename="../../qml/Solin/SettingsSectionHeader.qml" line="+28"/>
         <location line="+35"/>
         <source>Back to sections</source>
         <translation>Rudi kwenye sehemu</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+15"/>
         <source>Search settings</source>
         <translation>Mipangilio ya utafutaji</translation>
     </message>
@@ -9365,7 +9365,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Vipakuliwa</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-134"/>
         <source>Select…</source>
         <translation>Chagua...</translation>
     </message>
@@ -9395,13 +9395,13 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Skrini na maandishi ya kila mwaka</translation>
     </message>
     <message>
-        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../qml/Solin/AppTextField.qml" line="+67"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
         <source>Clear</source>
         <translation>Futa</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <location filename="../../qml/Solin/SettingsClockPicker.qml" line="+45"/>
         <source>Choose hour</source>
         <translation>Chagua saa</translation>
     </message>
@@ -9421,7 +9421,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Dakika %1</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../qml/Solin/SettingsCongregationDialog.qml" line="+31"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
         <source>Fill in from jw.org</source>
         <translation>Jaza kutoka jw.org</translation>
@@ -9433,18 +9433,18 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     </message>
     <message>
         <location line="+86"/>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="-201"/>
         <source>Close</source>
         <translation>Funga</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-88"/>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+30"/>
         <source>Search…</source>
         <translation>Tafuta…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+8"/>
         <source>HH:mm</source>
         <translation>HH: mm</translation>
     </message>
@@ -9455,20 +9455,20 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="+58"/>
         <source>Apply</source>
         <translation>Tumia</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="-2"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
         <location line="+52"/>
         <source>Cancel</source>
         <translation>Ghairi</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="-144"/>
         <source>Share Hotkey</source>
         <translation>Mkato wa Kushiriki</translation>
     </message>
@@ -9619,7 +9619,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
     </message>
     <message>
         <location filename="../../ui/qml/settings/catalogue.py" line="175"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="157"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="157"/>
         <source>Release notes</source>
         <translation>Maelezo ya toleo</translation>
     </message>
@@ -9629,45 +9629,45 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Onyesha maelezo ya matoleo ya beta</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="73"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="107"/>
-        <location filename="../../qml/SettingsPage.qml" line="164"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="73"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="107"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="164"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="74"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="108"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="74"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="108"/>
         <source>Installed</source>
         <translation>Limesakinishwa</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Collapse</source>
         <translation>Kunja</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Expand</source>
         <translation>Panua</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="177"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="177"/>
         <source>Loading release notes…</source>
         <translation>Inapakia maelezo ya toleo…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="188"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="188"/>
         <source>No release notes available.</source>
         <translation>Hakuna maelezo ya toleo yanayopatikana.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="207"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="207"/>
         <source>Try again</source>
         <translation>Jaribu tena</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Pakia mengine 5</translation>
     </message>
@@ -9702,7 +9702,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Hakuna upakuaji unaopatikana kwa mfumo huu.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>Fungua ukurasa wa kupakua</translation>
     </message>
@@ -9970,7 +9970,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Kutaniko</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+145"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+145"/>
         <source>Talk theme</source>
         <translation>Kichwa cha hotuba</translation>
     </message>
@@ -10029,20 +10029,20 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation type="vanished">▶  Onyesha</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+53"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+41"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+53"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+41"/>
         <source>Styles</source>
         <translation>Mitindo</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="+276"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="+276"/>
         <source>Delete preset</source>
         <translation>Futa mpangilio</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="+91"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="+91"/>
         <location line="+257"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+3"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+3"/>
         <source>Background</source>
         <translation>Mandharinyuma</translation>
     </message>
@@ -10256,7 +10256,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation type="vanished">Mf.: Jioni maalumu</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+331"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+331"/>
         <source>Delete preset?</source>
         <translation>Ufute mpangilio?</translation>
     </message>
@@ -10265,10 +10265,10 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation type="vanished">Mpangilio huu utafutwa kabisa.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="-314"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="-314"/>
         <location line="+74"/>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+170"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-332"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+170"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-332"/>
         <source>Text</source>
         <translation>Maandishi</translation>
     </message>
@@ -10320,7 +10320,7 @@ Ongeza maudhui, kamera, au mandhari nyingine.</translation>
         <translation>Picha ya mpangilio huu haikupatikana.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+20"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+20"/>
         <source>Front</source>
         <translation>Mbele</translation>
     </message>
@@ -10358,7 +10358,7 @@ Ongeza moja ukiwa tayari.</translation>
         <translation>Buruta safu ili kubadili maandishi yanayoonekana mbele.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="-229"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="-229"/>
         <source>Included styles</source>
         <translation>Mitindo iliyojumuishwa</translation>
     </message>
@@ -10378,13 +10378,13 @@ Ongeza moja ukiwa tayari.</translation>
         <translation>Geuza mandhari upendavyo na uihifadhi kama mpangilio.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+1"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-1"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+1"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-1"/>
         <source>Layers</source>
         <translation>Safu</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+513"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+513"/>
         <location line="+40"/>
         <source>Styles and layers</source>
         <translation>Mitindo na safu</translation>
@@ -10984,7 +10984,7 @@ Ongeza moja ukiwa tayari.</translation>
 <context>
     <name>TimerStepper</name>
     <message>
-        <location filename="../../qml/TimerStepper.qml" line="+88"/>
+        <location filename="../../qml/Solin/TimerStepper.qml" line="+88"/>
         <location line="+41"/>
         <source>Double-click to edit</source>
         <translation>Bofya mara mbili ili kuhariri</translation>
@@ -10993,7 +10993,7 @@ Ongeza moja ukiwa tayari.</translation>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+78"/>
+        <location filename="../../qml/Solin/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>Kipima Muda</translation>
     </message>
@@ -12246,8 +12246,8 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
 <context>
     <name>_PlaylistEditView</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-191"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+103"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-191"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+103"/>
         <source>Back</source>
         <translation>Nyuma</translation>
     </message>
@@ -12257,12 +12257,12 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
     </message>
     <message>
         <location line="+70"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+62"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+62"/>
         <source>Add Media</source>
         <translation>Ongeza Media</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="-45"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="-45"/>
         <source>Save playlist</source>
         <translation>Hifadhi orodha ya kucheza</translation>
     </message>
@@ -12287,25 +12287,25 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <translation>Orodha ya kucheza ya JW Library...</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+10"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+10"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Local File...</source>
         <translation>Faili la kifaa...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Search JW.org...</source>
         <translation>Tafuta kwenye JW.org...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Add Song...</source>
         <translation>Ongeza wimbo...</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Play all (in order)</source>
         <translation>Cheza zote (kwa mpangilio)</translation>
     </message>
@@ -12315,19 +12315,19 @@ Vifaa vyote viwili lazima viwe kwenye mtandao uleule wa Wi-Fi.</translation>
         <translation>Cheza bila mpangilio</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+11"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+5"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+11"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+5"/>
         <source>Section</source>
         <translation>Sehemu</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+1"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+1"/>
         <source>Add a new section</source>
         <translation>Ongeza sehemu mpya</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1515"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1515"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Buruta faili za media hapa au bofya  ＋  juu
@@ -12397,14 +12397,14 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
         <translation>Alama</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-51"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-51"/>
         <location line="+120"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-291"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-291"/>
         <source>Offline / Syncing</source>
         <translation>Nje ya mtandao / Inasawazisha</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+324"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+324"/>
         <source>Delete marker</source>
         <translation>Futa alama</translation>
     </message>
@@ -14192,7 +14192,7 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="-676"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="-676"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>HAZINA ZA NENO LA MUNGU</translation>
     </message>
@@ -14220,7 +14220,7 @@ Tumia kitufe cha kucheza ili kuonyesha · Buruta kishikio ⠿ ili kupanga upya</
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Bofya ili kurekodi</translation>
     </message>

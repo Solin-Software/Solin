@@ -15,9 +15,17 @@ from tests.e2e._packaged_app import (
     path_from_env,
     skip_if_solin_registry_exists,
 )
+from tests.e2e._qml_runtime import assert_packaged_qml_runtime
 
 
 pytestmark = pytest.mark.e2e
+
+
+def test_packaged_qml_runtime() -> None:
+    executable = path_from_env(
+        "SOLIN_PACKAGED_EXE", purpose="packaged QML runtime qualification",
+    )
+    assert_packaged_qml_runtime(executable)
 
 
 def test_packaged_media_runtime() -> None:

@@ -35,7 +35,7 @@
         <translation>Bobot (0–100): bobot yang lebih tinggi menerima lebih banyak penyesuaian. Bobot 0 membuat suatu bagian tetap jika bagian lain memiliki bobot positif. Jika semua bobot 0, bagian yang memenuhi syarat disesuaikan secara merata.</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+120"/>
         <location line="+199"/>
         <source>Clock</source>
         <translation>Jam</translation>
@@ -243,7 +243,7 @@
         <translation>Tidak ada monitor sekunder yang terdeteksi</translation>
     </message>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="+193"/>
         <source>Stop the running timer before switching schedules.</source>
         <translation>Hentikan pengatur waktu yang sedang berjalan sebelum beralih jadwal.</translation>
     </message>
@@ -311,7 +311,7 @@
         <location line="+59"/>
         <location line="+5"/>
         <location line="+172"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+581"/>
         <source>New schedule</source>
         <translation>Jadwal baru</translation>
     </message>
@@ -322,7 +322,7 @@
     </message>
     <message>
         <location line="+24"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+738"/>
         <source>Edit schedule</source>
         <translation>Edit jadwal</translation>
     </message>
@@ -368,20 +368,20 @@
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+1118"/>
         <source>Duplicate</source>
         <translation>Duplikat</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+70"/>
         <source>Reset results</source>
         <translation>Atur ulang hasil</translation>
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-34"/>
         <source>Delete</source>
         <translation>Hapus</translation>
     </message>
@@ -402,8 +402,8 @@
         <translation>Ekspor PDF</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-193"/>
         <source>Part</source>
         <translation>Bagian</translation>
     </message>
@@ -434,7 +434,7 @@
     </message>
     <message>
         <location line="+345"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+306"/>
         <location line="+354"/>
         <source>Delete part</source>
         <translation>Hapus bagian</translation>
@@ -451,18 +451,18 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-222"/>
         <source>Add part to section</source>
         <translation>Tambahkan bagian ke seksi</translation>
     </message>
     <message>
         <location line="+18"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+49"/>
         <source>Delete section</source>
         <translation>Hapus seksi</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>Monitor digunakan oleh media</translation>
     </message>
@@ -473,8 +473,8 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1026"/>
         <location line="+130"/>
         <location line="+66"/>
         <location line="+48"/>
@@ -490,7 +490,7 @@
         <translation>Batal</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="-239"/>
         <source>Projected %1 min behind</source>
         <translation>Diperkirakan terlambat %1 mnt</translation>
     </message>
@@ -547,7 +547,7 @@
     <message>
         <location line="+82"/>
         <location line="+540"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-66"/>
         <source>Edit part…</source>
         <translation>Edit bagian…</translation>
     </message>
@@ -567,7 +567,7 @@
     </message>
     <message>
         <location line="-404"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-164"/>
         <source>Target %1</source>
         <translation>Target %1</translation>
     </message>
@@ -589,7 +589,7 @@
         <location line="-316"/>
         <location line="+312"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+145"/>
         <source>Restart</source>
         <translation>Mulai ulang</translation>
     </message>
@@ -597,7 +597,7 @@
         <location line="-314"/>
         <location line="+309"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+1"/>
         <source>Start</source>
         <translation>Mulai</translation>
     </message>
@@ -610,14 +610,14 @@
     <message>
         <location line="-372"/>
         <location line="+408"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1405"/>
         <source>Reset</source>
         <translation>Atur ulang</translation>
     </message>
     <message>
         <location line="-405"/>
         <location line="+406"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+9"/>
         <source>Reset this part</source>
         <translation>Atur ulang bagian ini</translation>
     </message>
@@ -695,7 +695,7 @@
         <translation>Selanjutnya</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-56"/>
         <source>Editing: %1</source>
         <translation>Mengedit: %1</translation>
     </message>
@@ -707,7 +707,7 @@
     <message>
         <location line="+13"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+423"/>
         <location line="+56"/>
         <source>Add section</source>
         <translation>Tambahkan seksi</translation>
@@ -715,14 +715,14 @@
     <message>
         <location line="+9"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-172"/>
         <location line="+70"/>
         <source>Add part</source>
         <translation>Tambahkan bagian</translation>
     </message>
     <message>
         <location line="+25"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-350"/>
         <location line="+195"/>
         <location line="+48"/>
         <location line="+482"/>
@@ -792,7 +792,7 @@
         <translation>Seksi kosong — seret bagian ke sini atau klik +</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1475"/>
         <source>%1 (copy)</source>
         <translation>%1 (salinan)</translation>
     </message>
@@ -1106,7 +1106,7 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>Pintasan Otomatis</translation>
     </message>
@@ -1801,7 +1801,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1749"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1749"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + gulir untuk memperbesar · Seret untuk menggeser</translation>
     </message>
@@ -1880,7 +1880,7 @@
         <translation>Memuat</translation>
     </message>
     <message>
-        <location filename="../../qml/JWMediaCatalogModal.qml" line="+40"/>
+        <location filename="../../qml/Solin/JWMediaCatalogModal.qml" line="+40"/>
         <source>All</source>
         <translation>Semua</translation>
     </message>
@@ -1930,7 +1930,7 @@
         <translation>Tidak ada video ditemukan</translation>
     </message>
     <message>
-        <location filename="../../qml/MediaPlacementOverlay.qml" line="+85"/>
+        <location filename="../../qml/Solin/MediaPlacementOverlay.qml" line="+85"/>
         <source>Where to add?</source>
         <translation>Tambahkan ke mana?</translation>
     </message>
@@ -1943,7 +1943,7 @@
 <context>
     <name>JWSongsBridge</name>
     <message>
-        <location filename="../../qml/JWSongsModal.qml" line="+145"/>
+        <location filename="../../qml/Solin/JWSongsModal.qml" line="+145"/>
         <source>Add video song</source>
         <translation>Tambahkan lagu video</translation>
     </message>
@@ -2636,7 +2636,7 @@
 <context>
     <name>MediaCountdownPage</name>
     <message>
-        <location filename="../../qml/MediaCountdownPage.qml" line="+93"/>
+        <location filename="../../qml/Solin/MediaCountdownPage.qml" line="+93"/>
         <source>Tomorrow at %1</source>
         <translation>Besok pukul %1</translation>
     </message>
@@ -2894,7 +2894,7 @@
 <context>
     <name>MediaDestinationDialog</name>
     <message>
-        <location filename="../../qml/MediaDestinationDialog.qml" line="+77"/>
+        <location filename="../../qml/Solin/MediaDestinationDialog.qml" line="+77"/>
         <source>Back</source>
         <translation>Kembali</translation>
     </message>
@@ -3041,7 +3041,7 @@
     </message>
     <message>
         <location line="+9"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1156"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1156"/>
         <source>Try again</source>
         <translation>Coba lagi</translation>
     </message>
@@ -3051,7 +3051,7 @@
         <translation>Coba lagi</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1383"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1383"/>
         <source>Play</source>
         <translation>Putar</translation>
     </message>
@@ -3415,7 +3415,7 @@ Solin akan terus mencoba menyambung kembali dari posisi saat ini.
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
+        <location filename="../../qml/Solin/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>Media ini tidak tersedia untuk diedit.</translation>
     </message>
@@ -3437,7 +3437,7 @@ Solin akan terus mencoba menyambung kembali dari posisi saat ini.
     </message>
     <message>
         <location line="+93"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+28"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+28"/>
         <source>Start and end times</source>
         <translation>Waktu mulai dan selesai</translation>
     </message>
@@ -3500,7 +3500,7 @@ Solin akan terus mencoba menyambung kembali dari posisi saat ini.
 <context>
     <name>MeetingCanonicalRestore</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+142"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+142"/>
         <location filename="../../widgets/meetings/tree_controller.py" line="+249"/>
         <source>Restore official meeting content</source>
         <translation>Pulihkan konten resmi perhimpunan</translation>
@@ -4153,7 +4153,7 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
 <context>
     <name>OnboardingView</name>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+96"/>
         <source>Cancel</source>
         <translation>Batal</translation>
     </message>
@@ -4501,7 +4501,7 @@ Folder dan file yang terlihat di dalamnya akan tetap disimpan.</translation>
         <translation type="vanished">Hari dan waktu perhimpunan berasal dari jw.org.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+64"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>Hapus sidang</translation>
     </message>
@@ -5422,13 +5422,13 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
 <context>
     <name>PlaylistTransferDialog</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+131"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-64"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+131"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-64"/>
         <source>Cancel</source>
         <translation>Batal</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+12"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+12"/>
         <source>Retry</source>
         <translation>Coba lagi</translation>
     </message>
@@ -5566,7 +5566,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
 <context>
     <name>PlaylistTreeView</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+66"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+66"/>
         <source>Rename</source>
         <translation>Ubah nama</translation>
     </message>
@@ -6433,7 +6433,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation type="vanished">Siapkan perangkat</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Media</source>
         <translation>Siapkan Solin Media</translation>
     </message>
@@ -7356,7 +7356,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
+        <location filename="../../qml/Solin/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>Edit kamera</translation>
     </message>
@@ -7367,14 +7367,14 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+275"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+275"/>
         <source>Camera</source>
         <translation>Kamera</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+10"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>Nama</translation>
     </message>
@@ -7497,12 +7497,12 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="+694"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+94"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1047"/>
         <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
@@ -7512,22 +7512,22 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>Simpan</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>Menunggu bingkai pertama</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>Bingkai…</translation>
     </message>
@@ -7552,7 +7552,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Terapkan pembingkaian (Enter)</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-303"/>
         <source>Back to sources</source>
         <translation>Kembali ke sumber</translation>
     </message>
@@ -7670,7 +7670,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
     </message>
     <message>
         <location line="+2"/>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="+185"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="+185"/>
         <source>Zoom</source>
         <translation>Zoom</translation>
     </message>
@@ -7731,7 +7731,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>Hapus</translation>
@@ -7742,7 +7742,7 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Tambahkan</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="-97"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="-97"/>
         <source>PTZ controls are unavailable for this Solin installation.</source>
         <translation>Kendali PTZ tidak tersedia untuk instalasi Solin ini.</translation>
     </message>
@@ -7807,8 +7807,8 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Mengarahkan kamera…</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location filename="../../qml/Solin/ScenesScenePanel.qml" line="+172"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1193"/>
         <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -7820,8 +7820,8 @@ Susunan saat ini dan file akan dipertahankan. Perubahan tertunda dari sinkronisa
         <translation>Adegan</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesSourcePanel.qml" line="+159"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-84"/>
+        <location filename="../../qml/Solin/ScenesSourcePanel.qml" line="+159"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-84"/>
         <location line="+86"/>
         <source>Sources</source>
         <translation>Sumber</translation>
@@ -7874,7 +7874,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Kendali PTZ</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="-33"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="-33"/>
         <source>Precise transform</source>
         <translation>Transformasi presisi</translation>
     </message>
@@ -7914,7 +7914,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Rotasi</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>Buka adegan</translation>
     </message>
@@ -8029,14 +8029,14 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>md</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-436"/>
         <location line="+449"/>
         <source>Apply</source>
         <translation>Terapkan</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>Ubah nama…</translation>
     </message>
@@ -8299,19 +8299,19 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Keluaran · %1</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <location filename="../../qml/Solin/ScenesRecordingPopover.qml" line="+112"/>
         <source>Recording</source>
         <translation>Perekaman</translation>
     </message>
     <message>
         <location line="+58"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-166"/>
         <source>Record</source>
         <translation>Rekam</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-61"/>
         <source>Stop recording</source>
         <translation>Hentikan perekaman</translation>
     </message>
@@ -8322,19 +8322,19 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+58"/>
         <source>Starting…</source>
         <translation>Memulai…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1"/>
         <source>Finishing…</source>
         <translation>Menyelesaikan…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-55"/>
         <source>Start recording</source>
         <translation>Mulai merekam</translation>
     </message>
@@ -8690,7 +8690,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+115"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>Pengaturan</translation>
     </message>
@@ -8825,7 +8825,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Folder sinkronisasi (Dropbox, OneDrive, dll.) ditampilkan sebagai daftar putar.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+264"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>Pilih…</translation>
     </message>
@@ -8978,7 +8978,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation type="vanished">Buat satu atau beberapa pintasan untuk peristiwa mulai, selesai, jeda, dan lanjutkan.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+68"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>Tidak ada pintasan yang dikonfigurasi.</translation>
     </message>
@@ -8988,7 +8988,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Tambah pintasan</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-7"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>Edit</translation>
     </message>
@@ -9032,7 +9032,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Simpan perubahan</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsPage.qml" line="+184"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>Aplikasi Audio &amp; Video untuk perhimpunan di Balai Kerajaan.</translation>
     </message>
@@ -9052,13 +9052,13 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Aplikasi ini independen dan tidak berafiliasi dengan atau didukung oleh Watch Tower Bible and Tract Society of Pennsylvania atau organisasi terkait lainnya.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location filename="../../qml/Solin/SettingsSectionHeader.qml" line="+28"/>
         <location line="+35"/>
         <source>Back to sections</source>
         <translation>Kembali ke bagian</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+15"/>
         <source>Search settings</source>
         <translation>Pengaturan pencarian</translation>
     </message>
@@ -9330,7 +9330,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Unduhan</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-134"/>
         <source>Select…</source>
         <translation>Pilih…</translation>
     </message>
@@ -9360,13 +9360,13 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Layar dan teks tahunan</translation>
     </message>
     <message>
-        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../qml/Solin/AppTextField.qml" line="+67"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="-37"/>
         <source>Clear</source>
         <translation>Bersihkan</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <location filename="../../qml/Solin/SettingsClockPicker.qml" line="+45"/>
         <source>Choose hour</source>
         <translation>Pilih jam</translation>
     </message>
@@ -9386,7 +9386,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Menit %1</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../qml/Solin/SettingsCongregationDialog.qml" line="+31"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
         <source>Fill in from jw.org</source>
         <translation>Isi dari jw.org</translation>
@@ -9398,18 +9398,18 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     </message>
     <message>
         <location line="+86"/>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="-201"/>
         <source>Close</source>
         <translation>Tutup</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-88"/>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+30"/>
         <source>Search…</source>
         <translation>Cari…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+8"/>
         <source>HH:mm</source>
         <translation>HH:mm</translation>
     </message>
@@ -9420,20 +9420,20 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="+58"/>
         <source>Apply</source>
         <translation>Terapkan</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="-2"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
         <location line="+52"/>
         <source>Cancel</source>
         <translation>Batal</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="-144"/>
         <source>Share Hotkey</source>
         <translation>Pintasan Berbagi</translation>
     </message>
@@ -9584,7 +9584,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
     </message>
     <message>
         <location filename="../../ui/qml/settings/catalogue.py" line="175"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="157"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="157"/>
         <source>Release notes</source>
         <translation>Catatan rilis</translation>
     </message>
@@ -9594,45 +9594,45 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Tampilkan catatan rilis beta</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="73"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="107"/>
-        <location filename="../../qml/SettingsPage.qml" line="164"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="73"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="107"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="164"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="74"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="108"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="74"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="108"/>
         <source>Installed</source>
         <translation>Terinstal</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Collapse</source>
         <translation>Ciutkan</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Expand</source>
         <translation>Perluas</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="177"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="177"/>
         <source>Loading release notes…</source>
         <translation>Memuat catatan rilis…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="188"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="188"/>
         <source>No release notes available.</source>
         <translation>Tidak ada catatan rilis yang tersedia.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="207"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="207"/>
         <source>Try again</source>
         <translation>Coba lagi</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>Muat 5 lagi</translation>
     </message>
@@ -9667,7 +9667,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Tidak ada unduhan yang tersedia untuk sistem ini.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>Buka halaman unduhan</translation>
     </message>
@@ -9935,7 +9935,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Sidang</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+145"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+145"/>
         <source>Talk theme</source>
         <translation>Tema khotbah</translation>
     </message>
@@ -9994,20 +9994,20 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation type="vanished">▶  Proyeksikan</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+53"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+41"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+53"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+41"/>
         <source>Styles</source>
         <translation>Gaya</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="+276"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="+276"/>
         <source>Delete preset</source>
         <translation>Hapus preset</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="+91"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="+91"/>
         <location line="+257"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+3"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+3"/>
         <source>Background</source>
         <translation>Latar belakang</translation>
     </message>
@@ -10221,7 +10221,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation type="vanished">Contoh: Malam istimewa</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+331"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+331"/>
         <source>Delete preset?</source>
         <translation>Hapus preset?</translation>
     </message>
@@ -10230,10 +10230,10 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation type="vanished">Preset ini akan dihapus secara permanen.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="-314"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="-314"/>
         <location line="+74"/>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+170"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-332"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+170"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-332"/>
         <source>Text</source>
         <translation>Teks</translation>
     </message>
@@ -10285,7 +10285,7 @@ Tambahkan konten, kamera, atau adegan lain.</translation>
         <translation>Gambar untuk preset ini tidak ditemukan.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+20"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+20"/>
         <source>Front</source>
         <translation>Terdepan</translation>
     </message>
@@ -10323,7 +10323,7 @@ Tambahkan saat Anda siap.</translation>
         <translation>Seret lapisan untuk mengubah teks mana yang tampil di depan.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="-229"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="-229"/>
         <source>Included styles</source>
         <translation>Gaya bawaan</translation>
     </message>
@@ -10343,13 +10343,13 @@ Tambahkan saat Anda siap.</translation>
         <translation>Sesuaikan tema dan simpan sebagai preset.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+1"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-1"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+1"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-1"/>
         <source>Layers</source>
         <translation>Lapisan</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+513"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+513"/>
         <location line="+40"/>
         <source>Styles and layers</source>
         <translation>Gaya dan lapisan</translation>
@@ -10949,7 +10949,7 @@ Tambahkan saat Anda siap.</translation>
 <context>
     <name>TimerStepper</name>
     <message>
-        <location filename="../../qml/TimerStepper.qml" line="+88"/>
+        <location filename="../../qml/Solin/TimerStepper.qml" line="+88"/>
         <location line="+41"/>
         <source>Double-click to edit</source>
         <translation>Klik dua kali untuk mengedit</translation>
@@ -10958,7 +10958,7 @@ Tambahkan saat Anda siap.</translation>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+78"/>
+        <location filename="../../qml/Solin/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>Pengatur Waktu</translation>
     </message>
@@ -12201,8 +12201,8 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
 <context>
     <name>_PlaylistEditView</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-191"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+103"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-191"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+103"/>
         <source>Back</source>
         <translation>Kembali</translation>
     </message>
@@ -12212,12 +12212,12 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
     </message>
     <message>
         <location line="+70"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+62"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+62"/>
         <source>Add Media</source>
         <translation>Tambahkan Media</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="-45"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="-45"/>
         <source>Save playlist</source>
         <translation>Simpan daftar putar</translation>
     </message>
@@ -12242,25 +12242,25 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <translation>Daftar Putar JW Library...</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+10"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+10"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Local File...</source>
         <translation>File lokal...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Search JW.org...</source>
         <translation>Cari di JW.org...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Add Song...</source>
         <translation>Tambahkan lagu...</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Play all (in order)</source>
         <translation>Putar semua (berurutan)</translation>
     </message>
@@ -12270,19 +12270,19 @@ Kedua perangkat harus berada di jaringan Wi-Fi yang sama.</translation>
         <translation>Putar secara acak</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+11"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+5"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+11"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+5"/>
         <source>Section</source>
         <translation>Bagian</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+1"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+1"/>
         <source>Add a new section</source>
         <translation>Tambah bagian baru</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1515"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1515"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>Seret file media ke sini atau klik  ＋  di bagian atas
@@ -12352,14 +12352,14 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
         <translation>Penanda</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-51"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-51"/>
         <location line="+120"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-291"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-291"/>
         <source>Offline / Syncing</source>
         <translation>Offline / Menyinkronkan</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+324"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+324"/>
         <source>Delete marker</source>
         <translation>Hapus penanda</translation>
     </message>
@@ -14147,7 +14147,7 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="-676"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="-676"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>HARTA DALAM FIRMAN ALLAH</translation>
     </message>
@@ -14175,7 +14175,7 @@ Gunakan tombol putar untuk memproyeksikan · Seret pegangan ⠿ untuk mengubah u
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>Klik untuk merekam</translation>
     </message>

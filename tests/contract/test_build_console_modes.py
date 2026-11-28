@@ -120,7 +120,7 @@ def test_macos_qualifies_final_library_layout_before_signing_and_disk_image():
     workflow = _read(".github/workflows/build-solin-macos.yml")
     qualify = workflow.index("- name: Stage and qualify packaged libobs runtime")
     assert workflow.index("- name: Normalize macOS Qt QML runtime links") < qualify
-    assert workflow.index("- name: Verify compiled QML deployment") < qualify
+    assert workflow.index("- name: Verify QML deployment") < qualify
     assert qualify < workflow.index("- name: Ad-hoc sign app bundle")
     assert qualify < workflow.index("- name: Create DMG")
 

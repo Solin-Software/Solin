@@ -35,7 +35,7 @@
         <translation>가중치(0–100): 가중치가 높을수록 더 많이 조정됩니다. 다른 부분의 가중치가 양수이면 가중치가 0인 부분은 고정됩니다. 모든 가중치가 0이면 조정 가능한 부분이 균등하게 조정됩니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+120"/>
         <location line="+199"/>
         <source>Clock</source>
         <translation>시계</translation>
@@ -243,7 +243,7 @@
         <translation>보조 모니터를 감지할 수 없음</translation>
     </message>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="+193"/>
         <source>Stop the running timer before switching schedules.</source>
         <translation>일정을 전환하기 전에 실행 중인 타이머를 중지하세요.</translation>
     </message>
@@ -311,7 +311,7 @@
         <location line="+59"/>
         <location line="+5"/>
         <location line="+172"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+581"/>
         <source>New schedule</source>
         <translation>새 일정</translation>
     </message>
@@ -322,7 +322,7 @@
     </message>
     <message>
         <location line="+24"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+738"/>
         <source>Edit schedule</source>
         <translation>일정 편집</translation>
     </message>
@@ -368,20 +368,20 @@
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+1118"/>
         <source>Duplicate</source>
         <translation>복제</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+70"/>
         <source>Reset results</source>
         <translation>결과 재설정</translation>
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-34"/>
         <source>Delete</source>
         <translation>삭제</translation>
     </message>
@@ -402,8 +402,8 @@
         <translation>PDF 내보내기</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-193"/>
         <source>Part</source>
         <translation>파트</translation>
     </message>
@@ -434,7 +434,7 @@
     </message>
     <message>
         <location line="+345"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+306"/>
         <location line="+354"/>
         <source>Delete part</source>
         <translation>파트 삭제</translation>
@@ -451,18 +451,18 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-222"/>
         <source>Add part to section</source>
         <translation>섹션에 파트 추가</translation>
     </message>
     <message>
         <location line="+18"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+49"/>
         <source>Delete section</source>
         <translation>섹션 삭제</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>미디어가 사용 중인 모니터</translation>
     </message>
@@ -473,8 +473,8 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1026"/>
         <location line="+130"/>
         <location line="+66"/>
         <location line="+48"/>
@@ -490,7 +490,7 @@
         <translation>취소</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="-239"/>
         <source>Projected %1 min behind</source>
         <translation>%1분 지연 예상</translation>
     </message>
@@ -547,7 +547,7 @@
     <message>
         <location line="+82"/>
         <location line="+540"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-66"/>
         <source>Edit part…</source>
         <translation>파트 편집…</translation>
     </message>
@@ -567,7 +567,7 @@
     </message>
     <message>
         <location line="-404"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-164"/>
         <source>Target %1</source>
         <translation>목표 %1</translation>
     </message>
@@ -589,7 +589,7 @@
         <location line="-316"/>
         <location line="+312"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+145"/>
         <source>Restart</source>
         <translation>다시 시작</translation>
     </message>
@@ -597,7 +597,7 @@
         <location line="-314"/>
         <location line="+309"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+1"/>
         <source>Start</source>
         <translation>시작</translation>
     </message>
@@ -610,14 +610,14 @@
     <message>
         <location line="-372"/>
         <location line="+408"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1405"/>
         <source>Reset</source>
         <translation>재설정</translation>
     </message>
     <message>
         <location line="-405"/>
         <location line="+406"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+9"/>
         <source>Reset this part</source>
         <translation>이 파트 재설정</translation>
     </message>
@@ -695,7 +695,7 @@
         <translation>다음</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-56"/>
         <source>Editing: %1</source>
         <translation>편집 중: %1</translation>
     </message>
@@ -707,7 +707,7 @@
     <message>
         <location line="+13"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+423"/>
         <location line="+56"/>
         <source>Add section</source>
         <translation>섹션 추가</translation>
@@ -715,14 +715,14 @@
     <message>
         <location line="+9"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-172"/>
         <location line="+70"/>
         <source>Add part</source>
         <translation>파트 추가</translation>
     </message>
     <message>
         <location line="+25"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-350"/>
         <location line="+195"/>
         <location line="+48"/>
         <location line="+482"/>
@@ -792,7 +792,7 @@
         <translation>빈 섹션 — 파트를 여기로 드래그하거나 +를 클릭하세요</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1475"/>
         <source>%1 (copy)</source>
         <translation>%1 (사본)</translation>
     </message>
@@ -1106,7 +1106,7 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>자동 단축키</translation>
     </message>
@@ -1801,7 +1801,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1749"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1749"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + 스크롤로 확대/축소 · 드래그하여 이동</translation>
     </message>
@@ -1880,7 +1880,7 @@
         <translation>로드 중</translation>
     </message>
     <message>
-        <location filename="../../qml/JWMediaCatalogModal.qml" line="+40"/>
+        <location filename="../../qml/Solin/JWMediaCatalogModal.qml" line="+40"/>
         <source>All</source>
         <translation>모두</translation>
     </message>
@@ -1930,7 +1930,7 @@
         <translation>동영상을 찾을 수 없음</translation>
     </message>
     <message>
-        <location filename="../../qml/MediaPlacementOverlay.qml" line="+85"/>
+        <location filename="../../qml/Solin/MediaPlacementOverlay.qml" line="+85"/>
         <source>Where to add?</source>
         <translation>어디에 추가할까요?</translation>
     </message>
@@ -1943,7 +1943,7 @@
 <context>
     <name>JWSongsBridge</name>
     <message>
-        <location filename="../../qml/JWSongsModal.qml" line="+145"/>
+        <location filename="../../qml/Solin/JWSongsModal.qml" line="+145"/>
         <source>Add video song</source>
         <translation>동영상 노래 추가</translation>
     </message>
@@ -2636,7 +2636,7 @@
 <context>
     <name>MediaCountdownPage</name>
     <message>
-        <location filename="../../qml/MediaCountdownPage.qml" line="+93"/>
+        <location filename="../../qml/Solin/MediaCountdownPage.qml" line="+93"/>
         <source>Tomorrow at %1</source>
         <translation>내일 %1</translation>
     </message>
@@ -2894,7 +2894,7 @@
 <context>
     <name>MediaDestinationDialog</name>
     <message>
-        <location filename="../../qml/MediaDestinationDialog.qml" line="+77"/>
+        <location filename="../../qml/Solin/MediaDestinationDialog.qml" line="+77"/>
         <source>Back</source>
         <translation>뒤로</translation>
     </message>
@@ -3041,7 +3041,7 @@
     </message>
     <message>
         <location line="+9"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1156"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1156"/>
         <source>Try again</source>
         <translation>다시 시도</translation>
     </message>
@@ -3051,7 +3051,7 @@
         <translation>다시 시도</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1383"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1383"/>
         <source>Play</source>
         <translation>재생</translation>
     </message>
@@ -3415,7 +3415,7 @@ Solin이 현재 위치에서 계속 다시 연결을 시도합니다.
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
+        <location filename="../../qml/Solin/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>이 미디어는 편집할 수 없습니다.</translation>
     </message>
@@ -3437,7 +3437,7 @@ Solin이 현재 위치에서 계속 다시 연결을 시도합니다.
     </message>
     <message>
         <location line="+93"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+28"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+28"/>
         <source>Start and end times</source>
         <translation>시작 및 종료 시간</translation>
     </message>
@@ -3500,7 +3500,7 @@ Solin이 현재 위치에서 계속 다시 연결을 시도합니다.
 <context>
     <name>MeetingCanonicalRestore</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+142"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+142"/>
         <location filename="../../widgets/meetings/tree_controller.py" line="+249"/>
         <source>Restore official meeting content</source>
         <translation>집회의 공식 내용 복원</translation>
@@ -4153,7 +4153,7 @@ The folder and its visible files will be kept.</source>
 <context>
     <name>OnboardingView</name>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+96"/>
         <source>Cancel</source>
         <translation>취소</translation>
     </message>
@@ -4501,7 +4501,7 @@ The folder and its visible files will be kept.</source>
         <translation type="vanished">집회 요일과 시간은 jw.org에서 가져옵니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+64"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>회중 삭제</translation>
     </message>
@@ -5422,13 +5422,13 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>PlaylistTransferDialog</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+131"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-64"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+131"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-64"/>
         <source>Cancel</source>
         <translation>취소</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+12"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+12"/>
         <source>Retry</source>
         <translation>다시 시도</translation>
     </message>
@@ -5566,7 +5566,7 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>PlaylistTreeView</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+66"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+66"/>
         <source>Rename</source>
         <translation>이름 바꾸기</translation>
     </message>
@@ -6433,7 +6433,7 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="vanished">기기 설정</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Media</source>
         <translation>Solin Media 설정</translation>
     </message>
@@ -7356,7 +7356,7 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
+        <location filename="../../qml/Solin/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>카메라 편집</translation>
     </message>
@@ -7367,14 +7367,14 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+275"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+275"/>
         <source>Camera</source>
         <translation>카메라</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+10"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>이름</translation>
     </message>
@@ -7497,12 +7497,12 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="+694"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+94"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1047"/>
         <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
@@ -7512,22 +7512,22 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>저장</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>첫 프레임을 기다리는 중</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>프레이밍…</translation>
     </message>
@@ -7552,7 +7552,7 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>프레이밍 적용 (Enter)</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-303"/>
         <source>Back to sources</source>
         <translation>소스로 돌아가기</translation>
     </message>
@@ -7670,7 +7670,7 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+2"/>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="+185"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="+185"/>
         <source>Zoom</source>
         <translation>줌</translation>
     </message>
@@ -7731,7 +7731,7 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>삭제</translation>
@@ -7742,7 +7742,7 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>추가</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="-97"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="-97"/>
         <source>PTZ controls are unavailable for this Solin installation.</source>
         <translation>이 Solin 설치에서는 PTZ 제어를 사용할 수 없습니다.</translation>
     </message>
@@ -7807,8 +7807,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>카메라를 배치하는 중…</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location filename="../../qml/Solin/ScenesScenePanel.qml" line="+172"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1193"/>
         <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -7820,8 +7820,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>장면</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesSourcePanel.qml" line="+159"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-84"/>
+        <location filename="../../qml/Solin/ScenesSourcePanel.qml" line="+159"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-84"/>
         <location line="+86"/>
         <source>Sources</source>
         <translation>소스</translation>
@@ -7874,7 +7874,7 @@ Add content, a camera, or another scene.</source>
         <translation>PTZ 제어</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="-33"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="-33"/>
         <source>Precise transform</source>
         <translation>정밀 변형</translation>
     </message>
@@ -7914,7 +7914,7 @@ Add content, a camera, or another scene.</source>
         <translation>회전</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>장면 열기</translation>
     </message>
@@ -8029,14 +8029,14 @@ Add content, a camera, or another scene.</source>
         <translation>밀리초</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-436"/>
         <location line="+449"/>
         <source>Apply</source>
         <translation>적용</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>이름 바꾸기…</translation>
     </message>
@@ -8299,19 +8299,19 @@ Add content, a camera, or another scene.</source>
         <translation>출력 · %1</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <location filename="../../qml/Solin/ScenesRecordingPopover.qml" line="+112"/>
         <source>Recording</source>
         <translation>녹화</translation>
     </message>
     <message>
         <location line="+58"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-166"/>
         <source>Record</source>
         <translation>녹화</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-61"/>
         <source>Stop recording</source>
         <translation>녹화 중지</translation>
     </message>
@@ -8322,19 +8322,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+58"/>
         <source>Starting…</source>
         <translation>시작하는 중…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1"/>
         <source>Finishing…</source>
         <translation>마무리 중…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-55"/>
         <source>Start recording</source>
         <translation>녹화 시작</translation>
     </message>
@@ -8690,7 +8690,7 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+115"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>설정</translation>
     </message>
@@ -8872,7 +8872,7 @@ Add content, a camera, or another scene.</source>
         <translation>정보</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsPage.qml" line="+184"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>왕국회관 모임을 위한 오디오 및 비디오 애플리케이션.</translation>
     </message>
@@ -8966,7 +8966,7 @@ Add content, a camera, or another scene.</source>
         <translation>동기화 폴더(Dropbox, OneDrive 등)가 재생목록으로 표시됩니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+264"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>선택…</translation>
     </message>
@@ -9021,7 +9021,7 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">시작, 종료, 일시 정지, 재개 이벤트에 대한 단축키를 하나 이상 만드십시오.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+68"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>설정된 단축키가 없습니다.</translation>
     </message>
@@ -9031,7 +9031,7 @@ Add content, a camera, or another scene.</source>
         <translation>단축키 추가</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-7"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>편집</translation>
     </message>
@@ -9052,13 +9052,13 @@ Add content, a camera, or another scene.</source>
         <translation>변경 사항 저장</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location filename="../../qml/Solin/SettingsSectionHeader.qml" line="+28"/>
         <location line="+35"/>
         <source>Back to sections</source>
         <translation>섹션으로 돌아가기</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+15"/>
         <source>Search settings</source>
         <translation>검색 설정</translation>
     </message>
@@ -9340,7 +9340,7 @@ Add content, a camera, or another scene.</source>
         <translation>{year}에 대한 연간 텍스트 업데이트됨</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-134"/>
         <source>Select…</source>
         <translation>선택…</translation>
     </message>
@@ -9360,13 +9360,13 @@ Add content, a camera, or another scene.</source>
         <translation>삭제</translation>
     </message>
     <message>
-        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../qml/Solin/AppTextField.qml" line="+67"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="-10"/>
         <source>Clear</source>
         <translation>지우기</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <location filename="../../qml/Solin/SettingsClockPicker.qml" line="+45"/>
         <source>Choose hour</source>
         <translation>시간 선택</translation>
     </message>
@@ -9386,7 +9386,7 @@ Add content, a camera, or another scene.</source>
         <translation>분%1</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../qml/Solin/SettingsCongregationDialog.qml" line="+31"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
         <source>Fill in from jw.org</source>
         <translation>jw.org에서 가져오기</translation>
@@ -9398,18 +9398,18 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+86"/>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="-201"/>
         <source>Close</source>
         <translation>닫기</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-88"/>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+30"/>
         <source>Search…</source>
         <translation>검색…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+8"/>
         <source>HH:mm</source>
         <translation>HH:mm</translation>
     </message>
@@ -9420,20 +9420,20 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="+58"/>
         <source>Apply</source>
         <translation>적용</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="-2"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
         <location line="+52"/>
         <source>Cancel</source>
         <translation>취소</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="-144"/>
         <source>Share Hotkey</source>
         <translation>공유 단축키</translation>
     </message>
@@ -9584,7 +9584,7 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location filename="../../ui/qml/settings/catalogue.py" line="175"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="157"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="157"/>
         <source>Release notes</source>
         <translation>릴리스 노트</translation>
     </message>
@@ -9594,45 +9594,45 @@ Add content, a camera, or another scene.</source>
         <translation>베타 버전 릴리스 노트 표시</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="73"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="107"/>
-        <location filename="../../qml/SettingsPage.qml" line="164"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="73"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="107"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="164"/>
         <source>Beta</source>
         <translation>베타</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="74"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="108"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="74"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="108"/>
         <source>Installed</source>
         <translation>설치됨</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Collapse</source>
         <translation>접기</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Expand</source>
         <translation>펼치기</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="177"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="177"/>
         <source>Loading release notes…</source>
         <translation>릴리스 노트 불러오는 중…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="188"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="188"/>
         <source>No release notes available.</source>
         <translation>릴리스 노트가 없습니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="207"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="207"/>
         <source>Try again</source>
         <translation>다시 시도</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>5개 더 불러오기</translation>
     </message>
@@ -9667,7 +9667,7 @@ Add content, a camera, or another scene.</source>
         <translation>이 시스템에서 사용할 수 있는 다운로드가 없습니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>다운로드 페이지 열기</translation>
     </message>
@@ -9935,7 +9935,7 @@ Add content, a camera, or another scene.</source>
         <translation>회중</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+145"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+145"/>
         <source>Talk theme</source>
         <translation>강연 주제</translation>
     </message>
@@ -9994,20 +9994,20 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">▶  프로젝션</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+53"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+41"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+53"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+41"/>
         <source>Styles</source>
         <translation>스타일</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="+276"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="+276"/>
         <source>Delete preset</source>
         <translation>프리셋 삭제</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="+91"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="+91"/>
         <location line="+257"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+3"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+3"/>
         <source>Background</source>
         <translation>배경</translation>
     </message>
@@ -10221,7 +10221,7 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">예: 특별한 저녁</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+331"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+331"/>
         <source>Delete preset?</source>
         <translation>프리셋을 삭제할까요?</translation>
     </message>
@@ -10230,10 +10230,10 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">이 프리셋은 영구적으로 삭제됩니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="-314"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="-314"/>
         <location line="+74"/>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+170"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-332"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+170"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-332"/>
         <source>Text</source>
         <translation>텍스트</translation>
     </message>
@@ -10285,7 +10285,7 @@ Add content, a camera, or another scene.</source>
         <translation>이 프리셋의 이미지를 찾을 수 없습니다.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+20"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+20"/>
         <source>Front</source>
         <translation>맨 앞</translation>
     </message>
@@ -10323,7 +10323,7 @@ Add one when you are ready.</source>
         <translation>레이어를 드래그하여 앞에 표시할 텍스트 순서를 변경하세요.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="-229"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="-229"/>
         <source>Included styles</source>
         <translation>기본 제공 스타일</translation>
     </message>
@@ -10343,13 +10343,13 @@ Add one when you are ready.</source>
         <translation>테마를 사용자 지정하고 프리셋으로 저장하세요.</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+1"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-1"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+1"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-1"/>
         <source>Layers</source>
         <translation>레이어</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+513"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+513"/>
         <location line="+40"/>
         <source>Styles and layers</source>
         <translation>스타일 및 레이어</translation>
@@ -10949,7 +10949,7 @@ Add one when you are ready.</source>
 <context>
     <name>TimerStepper</name>
     <message>
-        <location filename="../../qml/TimerStepper.qml" line="+88"/>
+        <location filename="../../qml/Solin/TimerStepper.qml" line="+88"/>
         <location line="+41"/>
         <source>Double-click to edit</source>
         <translation>두 번 클릭하여 편집</translation>
@@ -10958,7 +10958,7 @@ Add one when you are ready.</source>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+78"/>
+        <location filename="../../qml/Solin/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>스톱워치</translation>
     </message>
@@ -12201,8 +12201,8 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>_PlaylistEditView</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-191"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+103"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-191"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+103"/>
         <source>Back</source>
         <translation>뒤로</translation>
     </message>
@@ -12212,12 +12212,12 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location line="+70"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+62"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+62"/>
         <source>Add Media</source>
         <translation>미디어 추가</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="-45"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="-45"/>
         <source>Save playlist</source>
         <translation>재생목록 저장</translation>
     </message>
@@ -12242,25 +12242,25 @@ Both devices must be on the same Wi-Fi network.</source>
         <translation>JW Library 재생목록...</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+10"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+10"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Local File...</source>
         <translation>로컬 파일...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Search JW.org...</source>
         <translation>JW.org 검색...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Add Song...</source>
         <translation>노래 추가...</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Play all (in order)</source>
         <translation>모두 재생 (순서대로)</translation>
     </message>
@@ -12270,19 +12270,19 @@ Both devices must be on the same Wi-Fi network.</source>
         <translation>무작위 순서로 재생</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+11"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+5"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+11"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+5"/>
         <source>Section</source>
         <translation>섹션</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+1"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+1"/>
         <source>Add a new section</source>
         <translation>새 섹션 추가</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1515"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1515"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>여기로 미디어 파일을 드래그하거나 상단의 ＋ 를 클릭하십시오
@@ -12352,14 +12352,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>마커</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-51"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-51"/>
         <location line="+120"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-291"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-291"/>
         <source>Offline / Syncing</source>
         <translation>오프라인 / 동기화 중</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+324"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+324"/>
         <source>Delete marker</source>
         <translation>마커 삭제</translation>
     </message>
@@ -14147,7 +14147,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="-676"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="-676"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>성경에 담긴 보물</translation>
     </message>
@@ -14175,7 +14175,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>클릭하여 기록</translation>
     </message>

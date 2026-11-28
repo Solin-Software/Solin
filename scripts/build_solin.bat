@@ -28,10 +28,9 @@ if not defined PYTHON (
     set "PYTHON=python"
 )
 set QML_SOURCE_DIR=%PROJECT_ROOT%src\solin\qml
-set QML_MODULE_ROOT=%PROJECT_ROOT%build\qmlcache\solin\qml
-set QML_CACHE_DIR=%QML_MODULE_ROOT%\Solin
-set QT_QML_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\PySide6\qml
-set QT_LIBRARY_CACHE_DIR=%PROJECT_ROOT%build\qmlcache\qt-libs
+set QML_ARCHIVE=%PROJECT_ROOT%build\qml-runtime\solin-qml.rcc
+set QT_QML_STAGE_DIR=%PROJECT_ROOT%build\qml-runtime\PySide6\qml
+set QT_LIBRARY_STAGE_DIR=%PROJECT_ROOT%build\qml-runtime\qt-libs
 
 "%PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else 1)" >nul 2>nul
 if errorlevel 1 (
@@ -97,19 +96,17 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
-rmdir /s /q "%QML_MODULE_ROOT%" 2>nul
-
-"%PYTHON%" "%PROJECT_ROOT%scripts\compile_qml_cache.py" ^
+"%PYTHON%" "%PROJECT_ROOT%scripts\package_qml_runtime.py" ^
     --source-dir "%QML_SOURCE_DIR%" ^
-    --output-dir "%QML_CACHE_DIR%" ^
-    --qt-qml-output-dir "%QT_QML_CACHE_DIR%" ^
-    --qt-library-output-dir "%QT_LIBRARY_CACHE_DIR%" ^
+    --archive "%QML_ARCHIVE%" ^
+    --qt-qml-output-dir "%QT_QML_STAGE_DIR%" ^
+    --qt-library-output-dir "%QT_LIBRARY_STAGE_DIR%" ^
     --qt-qml-module "QtQuick/Controls/impl" ^
     --qt-qml-module "QtQuick/Controls/Basic/impl"
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo  [ERRO] Geracao do cache compilado de QML falhou com codigo %ERRORLEVEL%.
+    echo  [ERRO] Geracao dos recursos QML falhou com codigo %ERRORLEVEL%.
     pause
     exit /b %ERRORLEVEL%
 )
@@ -161,10 +158,10 @@ if %ERRORLEVEL% NEQ 0 exit /b %ERRORLEVEL%
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\assets=solin/resources/assets" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\remote_control=solin/resources/remote_control" ^
     --include-data-dir="%PROJECT_ROOT%src\solin\resources\translations\locales=solin/resources/translations/locales" ^
-    --include-data-dir="%QML_CACHE_DIR%=solin/qml/Solin" ^
-    --include-data-dir="%QT_QML_CACHE_DIR%=PySide6/qml" ^
-    --include-data-files="%QT_QML_CACHE_DIR%=PySide6/qml/=**/*.dll" ^
-    --include-data-files="%QT_LIBRARY_CACHE_DIR%\*.dll=./" ^
+    --include-data-files="%QML_ARCHIVE%=solin/qml/solin-qml.rcc" ^
+    --include-data-dir="%QT_QML_STAGE_DIR%=PySide6/qml" ^
+    --include-data-files="%QT_QML_STAGE_DIR%=PySide6/qml/=**/*.dll" ^
+    --include-data-files="%QT_LIBRARY_STAGE_DIR%\*.dll=./" ^
     --include-data-files="%TRANSLATIONS_DIR%\*.qm=solin/resources/translations/" ^
     --include-data-files="%SIDEVIEW_NATIVE_DLL%=sideview/sideview_native.dll" ^
     --enable-plugin=pyside6 ^
@@ -205,38 +202,18 @@ if exist "%DIST%\qtwebengine_devtools_resources.debug.pak" (
     echo  [OK] qtwebengine_devtools_resources.debug.pak removido
 )
 
-del /f /q "%DIST%\solin\qml\*.qmlc" 2>nul
-del /f /q "%DIST%\solin\qml\*.qml" 2>nul
-del /f /q "%DIST%\solin\qml\qmldir" 2>nul
-
-if not exist "%DIST%\solin\qml\Solin\*.qmlc" (
-    echo  [ERRO] Nenhum cache QML .qmlc foi empacotado em %DIST%\solin\qml\Solin.
+if not exist "%DIST%\solin\qml\solin-qml.rcc" (
+    echo  [ERRO] Arquivo de recursos QML nao foi empacotado.
     pause
     exit /b 1
 )
 
-for %%F in ("%DIST%\solin\qml\Solin\*.qml") do (
-    if exist "%%~fF" if /I "%%~xF"==".qml" (
-        del /f /q "%%~fF"
-        echo  [OK] QML fonte removido: %%~nxF
+for /R "%DIST%\solin\qml" %%F in (*) do (
+    if /I not "%%~nxF"=="solin-qml.rcc" (
+        echo  [ERRO] Arquivo QML avulso no pacote: %%~fF
+        pause
+        exit /b 1
     )
-)
-
-if not exist "%DIST%\solin\qml\Solin\qmldir" (
-    echo  [ERRO] Metadados qmldir dos QML compilados nao foram empacotados.
-    pause
-    exit /b 1
-)
-
-set RAW_QML_FOUND=
-for %%F in ("%DIST%\solin\qml\Solin\*.qml") do (
-    if exist "%%~fF" if /I "%%~xF"==".qml" set RAW_QML_FOUND=1
-)
-
-if defined RAW_QML_FOUND (
-    echo  [ERRO] Arquivos QML fonte permaneceram em %DIST%\solin\qml\Solin.
-    pause
-    exit /b 1
 )
 
 if not exist "%DIST%\PySide6\qml\QtQuick\qmldir" (
@@ -317,7 +294,7 @@ if not exist "%DIST%\Qt6QuickTemplates2.dll" (
     exit /b 1
 )
 
-echo  [OK] QML do app empacotado somente como cache .qmlc
+echo  [OK] Arquivo de recursos QML do app verificado
 
 "%PYTHON%" "%PROJECT_ROOT%scripts\package_libobs_runtime.py" ^
     --application-dir "%DIST%" ^

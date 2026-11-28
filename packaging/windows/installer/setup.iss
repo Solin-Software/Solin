@@ -151,6 +151,8 @@ Type: filesandordirs; Name: "{app}\backports"
 ; Retire the previous engine, Qt bridge and private runtime without deleting
 ; sibling native payloads or the independently managed camera versions.
 Type: filesandordirs; Name: "{app}\native\media-engine"
+; Retire the old bytecode module before installing the QML resource archive.
+Type: filesandordirs; Name: "{app}\solin\qml\Solin"
 
 ; =============================================================================
 [Files]

@@ -11,6 +11,14 @@ same compiler through setuptools, with a pinned PySide6 build dependency for
 isolated builds. See [Translations](translations.md#development-and-builds) for
 development preparation and the source/distribution resource contract.
 
+`src/solin/qml` is the import root for the named `Solin` and `Solin.Shell`
+modules. When adding a named QML type, declare it in its module's `qmldir`.
+Source runs and wheels load these files directly. Standalone builds use
+`scripts/package_qml_runtime.py` and PySide6's `pyside6-rcc` to embed the same
+modules under `qrc:/qt/qml` in `solin/qml/solin-qml.rcc`. The packaged
+`--verify-qml-runtime` smoke test opens both modules through the shared QML host
+and checks their resource URLs.
+
 Playback and scenes use the supervised libobs sidecar. Source runs and wheel
 installations launch its Python module; standalone builds launch the Solin
 executable with
@@ -239,15 +247,12 @@ rollback that a copied directory cannot provide. Release runs resolve and
 verify their predecessor automatically; a manual diagnostic run may disable
 upgrade smoke testing.
 
-Upgrades remove the installer-owned `backports` runtime directory and retired
-`native/media-engine` payload before copying the new files. This removes the old
-engine executable, Qt bridge and private runtime. Optional extensions left by
-an older local build must not remain importable when their compiled Python
-package is absent from the new executable. Cleanup leaves `native/virtual-camera`,
-other native files and the independently managed camera versions intact.
-The upgrade smoke seeds an obsolete extension and retired engine files and
-verifies their removal, the current packaged and managed camera pair, HTTP
-operation and preservation of unrelated files and user state.
+Upgrades remove the installer-owned `backports` directory, retired
+`native/media-engine` payload, and legacy bytecode module under
+`solin/qml/Solin` before copying the new files. The upgrade smoke seeds these
+legacy paths, verifies their removal, and checks HTTP and QML loading through
+the upgraded executable. It also checks the packaged and managed camera pair
+and preservation of unrelated files and user state.
 
 The DirectShow filters are staged as an immutable x64/x86 pair identified by
 their binary hashes, independently of the application version. Reinstalling

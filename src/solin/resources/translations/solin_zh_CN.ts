@@ -35,7 +35,7 @@
         <translation>权重（0–100）：权重越高，调整幅度越大。当其他部分的权重为正数时，权重为 0 的部分保持不变。如果所有权重均为 0，则符合条件的部分将被平均调整。</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+120"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+120"/>
         <location line="+199"/>
         <source>Clock</source>
         <translation>时钟</translation>
@@ -243,7 +243,7 @@
         <translation>未检测到副显示器</translation>
     </message>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="+193"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="+193"/>
         <source>Stop the running timer before switching schedules.</source>
         <translation>切换日程前，请先停止正在运行的计时器。</translation>
     </message>
@@ -311,7 +311,7 @@
         <location line="+59"/>
         <location line="+5"/>
         <location line="+172"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+581"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+581"/>
         <source>New schedule</source>
         <translation>新建日程</translation>
     </message>
@@ -322,7 +322,7 @@
     </message>
     <message>
         <location line="+24"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+738"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+738"/>
         <source>Edit schedule</source>
         <translation>编辑日程</translation>
     </message>
@@ -368,20 +368,20 @@
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+1118"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+1118"/>
         <source>Duplicate</source>
         <translation>复制</translation>
     </message>
     <message>
         <location line="+15"/>
-        <location filename="../../qml/TimerClockPanel.qml" line="+346"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+70"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="+346"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+70"/>
         <source>Reset results</source>
         <translation>重置结果</translation>
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-34"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-34"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
@@ -402,8 +402,8 @@
         <translation>导出 PDF</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleList.qml" line="+126"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-193"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+126"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-193"/>
         <source>Part</source>
         <translation>环节</translation>
     </message>
@@ -434,7 +434,7 @@
     </message>
     <message>
         <location line="+345"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+306"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+306"/>
         <location line="+354"/>
         <source>Delete part</source>
         <translation>删除环节</translation>
@@ -451,18 +451,18 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-222"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-222"/>
         <source>Add part to section</source>
         <translation>向板块添加环节</translation>
     </message>
     <message>
         <location line="+18"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="+49"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="+49"/>
         <source>Delete section</source>
         <translation>删除板块</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerSettingsDialog.qml" line="+114"/>
+        <location filename="../../qml/Solin/TimerSettingsDialog.qml" line="+114"/>
         <source>Monitor in use by media</source>
         <translation>显示器正被媒体使用</translation>
     </message>
@@ -473,8 +473,8 @@
     </message>
     <message>
         <location line="+13"/>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-432"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1026"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-432"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1026"/>
         <location line="+130"/>
         <location line="+66"/>
         <location line="+48"/>
@@ -490,7 +490,7 @@
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerClockPanel.qml" line="-239"/>
+        <location filename="../../qml/Solin/TimerClockPanel.qml" line="-239"/>
         <source>Projected %1 min behind</source>
         <translation>预计延迟 %1 分钟</translation>
     </message>
@@ -547,7 +547,7 @@
     <message>
         <location line="+82"/>
         <location line="+540"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-66"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-66"/>
         <source>Edit part…</source>
         <translation>编辑环节…</translation>
     </message>
@@ -567,7 +567,7 @@
     </message>
     <message>
         <location line="-404"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="-164"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="-164"/>
         <source>Target %1</source>
         <translation>目标 %1</translation>
     </message>
@@ -589,7 +589,7 @@
         <location line="-316"/>
         <location line="+312"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+145"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+145"/>
         <source>Restart</source>
         <translation>重新开始</translation>
     </message>
@@ -597,7 +597,7 @@
         <location line="-314"/>
         <location line="+309"/>
         <location line="+5"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+1"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+1"/>
         <source>Start</source>
         <translation>开始</translation>
     </message>
@@ -610,14 +610,14 @@
     <message>
         <location line="-372"/>
         <location line="+408"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1405"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1405"/>
         <source>Reset</source>
         <translation>重置</translation>
     </message>
     <message>
         <location line="-405"/>
         <location line="+406"/>
-        <location filename="../../qml/TimerScheduleList.qml" line="+9"/>
+        <location filename="../../qml/Solin/TimerScheduleList.qml" line="+9"/>
         <source>Reset this part</source>
         <translation>重置此环节</translation>
     </message>
@@ -695,7 +695,7 @@
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerScheduleEditor.qml" line="-56"/>
+        <location filename="../../qml/Solin/TimerScheduleEditor.qml" line="-56"/>
         <source>Editing: %1</source>
         <translation>正在编辑：%1</translation>
     </message>
@@ -707,7 +707,7 @@
     <message>
         <location line="+13"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="+423"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="+423"/>
         <location line="+56"/>
         <source>Add section</source>
         <translation>添加板块</translation>
@@ -715,14 +715,14 @@
     <message>
         <location line="+9"/>
         <location line="+3"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-172"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-172"/>
         <location line="+70"/>
         <source>Add part</source>
         <translation>添加环节</translation>
     </message>
     <message>
         <location line="+25"/>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-350"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-350"/>
         <location line="+195"/>
         <location line="+48"/>
         <location line="+482"/>
@@ -792,7 +792,7 @@
         <translation>空板块 — 将环节拖到此处或点击 +</translation>
     </message>
     <message>
-        <location filename="../../qml/TimerCustomScheduleDialogs.qml" line="-1475"/>
+        <location filename="../../qml/Solin/TimerCustomScheduleDialogs.qml" line="-1475"/>
         <source>%1 (copy)</source>
         <translation>%1（副本）</translation>
     </message>
@@ -1106,7 +1106,7 @@
 <context>
     <name>AutoKeyEditorDialog</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+53"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+53"/>
         <source>Automatic Shortcut</source>
         <translation>自动快捷键</translation>
     </message>
@@ -1801,7 +1801,7 @@
 <context>
     <name>ImageFramingThumbnail</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1749"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1749"/>
         <source>Ctrl + scroll to zoom · Drag to pan</source>
         <translation>Ctrl + 滚轮缩放 · 拖动平移</translation>
     </message>
@@ -1880,7 +1880,7 @@
         <translation>正在加载</translation>
     </message>
     <message>
-        <location filename="../../qml/JWMediaCatalogModal.qml" line="+40"/>
+        <location filename="../../qml/Solin/JWMediaCatalogModal.qml" line="+40"/>
         <source>All</source>
         <translation>全部</translation>
     </message>
@@ -1930,7 +1930,7 @@
         <translation>未找到视频</translation>
     </message>
     <message>
-        <location filename="../../qml/MediaPlacementOverlay.qml" line="+85"/>
+        <location filename="../../qml/Solin/MediaPlacementOverlay.qml" line="+85"/>
         <source>Where to add?</source>
         <translation>添加到哪里？</translation>
     </message>
@@ -1943,7 +1943,7 @@
 <context>
     <name>JWSongsBridge</name>
     <message>
-        <location filename="../../qml/JWSongsModal.qml" line="+145"/>
+        <location filename="../../qml/Solin/JWSongsModal.qml" line="+145"/>
         <source>Add video song</source>
         <translation>添加诗歌视频</translation>
     </message>
@@ -2636,7 +2636,7 @@
 <context>
     <name>MediaCountdownPage</name>
     <message>
-        <location filename="../../qml/MediaCountdownPage.qml" line="+93"/>
+        <location filename="../../qml/Solin/MediaCountdownPage.qml" line="+93"/>
         <source>Tomorrow at %1</source>
         <translation>明天 %1</translation>
     </message>
@@ -2894,7 +2894,7 @@
 <context>
     <name>MediaDestinationDialog</name>
     <message>
-        <location filename="../../qml/MediaDestinationDialog.qml" line="+77"/>
+        <location filename="../../qml/Solin/MediaDestinationDialog.qml" line="+77"/>
         <source>Back</source>
         <translation>返回</translation>
     </message>
@@ -3041,7 +3041,7 @@
     </message>
     <message>
         <location line="+9"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1156"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1156"/>
         <source>Try again</source>
         <translation>重试</translation>
     </message>
@@ -3051,7 +3051,7 @@
         <translation>重试</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+1383"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+1383"/>
         <source>Play</source>
         <translation>播放</translation>
     </message>
@@ -3415,7 +3415,7 @@ Solin 将继续尝试从当前位置重新连接。
 <context>
     <name>MediaTrimDialog</name>
     <message>
-        <location filename="../../qml/MediaTrimDialog.qml" line="+143"/>
+        <location filename="../../qml/Solin/MediaTrimDialog.qml" line="+143"/>
         <source>This media is not available for editing.</source>
         <translation>此媒体无法编辑。</translation>
     </message>
@@ -3437,7 +3437,7 @@ Solin 将继续尝试从当前位置重新连接。
     </message>
     <message>
         <location line="+93"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+28"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+28"/>
         <source>Start and end times</source>
         <translation>开始和结束时间</translation>
     </message>
@@ -3500,7 +3500,7 @@ Solin 将继续尝试从当前位置重新连接。
 <context>
     <name>MeetingCanonicalRestore</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+142"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+142"/>
         <location filename="../../widgets/meetings/tree_controller.py" line="+249"/>
         <source>Restore official meeting content</source>
         <translation>恢复聚会的官方内容</translation>
@@ -4153,7 +4153,7 @@ The folder and its visible files will be kept.</source>
 <context>
     <name>OnboardingView</name>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+96"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+96"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
@@ -4501,7 +4501,7 @@ The folder and its visible files will be kept.</source>
         <translation type="vanished">聚会日期和时间来自 jw.org。</translation>
     </message>
     <message>
-        <location filename="../../qml/OnboardingView.qml" line="+64"/>
+        <location filename="../../qml/Solin/OnboardingView.qml" line="+64"/>
         <source>Remove congregation</source>
         <translation>移除会众</translation>
     </message>
@@ -5422,13 +5422,13 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>PlaylistTransferDialog</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+131"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-64"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+131"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-64"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+12"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+12"/>
         <source>Retry</source>
         <translation>重试</translation>
     </message>
@@ -5566,7 +5566,7 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>PlaylistTreeView</name>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+66"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+66"/>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
@@ -6433,7 +6433,7 @@ The current organization and files will be preserved. Pending changes from the p
         <translation type="vanished">设置设备</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="+43"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="+43"/>
         <source>Set up Solin Media</source>
         <translation>设置 Solin 媒体</translation>
     </message>
@@ -7356,7 +7356,7 @@ The current organization and files will be preserved. Pending changes from the p
 <context>
     <name>ScenesEditorView</name>
     <message>
-        <location filename="../../qml/ScenesCameraDialog.qml" line="+165"/>
+        <location filename="../../qml/Solin/ScenesCameraDialog.qml" line="+165"/>
         <source>Edit camera</source>
         <translation>编辑摄像机</translation>
     </message>
@@ -7367,14 +7367,14 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+22"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+275"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+275"/>
         <source>Camera</source>
         <translation>摄像机</translation>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+10"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1783"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+10"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1783"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
@@ -7497,12 +7497,12 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+17"/>
-        <location filename="../../qml/ScenesCanvas.qml" line="+694"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="+33"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="+694"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="+33"/>
         <location line="+65"/>
         <location line="+29"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+94"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1047"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+94"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1047"/>
         <location line="+449"/>
         <location line="+89"/>
         <location line="+68"/>
@@ -7512,22 +7512,22 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-93"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-93"/>
         <location line="+65"/>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-574"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-574"/>
         <location line="+13"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-529"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-529"/>
         <source>Waiting for the first frame</source>
         <translation>正在等待第一帧</translation>
     </message>
     <message>
         <location line="+515"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-188"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-188"/>
         <source>Frame…</source>
         <translation>构图…</translation>
     </message>
@@ -7552,7 +7552,7 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>应用构图 (Enter)</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzInspector.qml" line="-303"/>
+        <location filename="../../qml/Solin/ScenesPtzInspector.qml" line="-303"/>
         <source>Back to sources</source>
         <translation>返回来源</translation>
     </message>
@@ -7670,7 +7670,7 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+2"/>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="+185"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="+185"/>
         <source>Zoom</source>
         <translation>变焦</translation>
     </message>
@@ -7731,7 +7731,7 @@ The current organization and files will be preserved. Pending changes from the p
     </message>
     <message>
         <location line="+7"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+236"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+236"/>
         <location line="+68"/>
         <source>Delete</source>
         <translation>删除</translation>
@@ -7742,7 +7742,7 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>添加</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesPtzPopup.qml" line="-97"/>
+        <location filename="../../qml/Solin/ScenesPtzPopup.qml" line="-97"/>
         <source>PTZ controls are unavailable for this Solin installation.</source>
         <translation>此 Solin 安装不支持 PTZ 控制。</translation>
     </message>
@@ -7807,8 +7807,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>正在定位摄像机……</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesScenePanel.qml" line="+172"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-1193"/>
+        <location filename="../../qml/Solin/ScenesScenePanel.qml" line="+172"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-1193"/>
         <location line="+313"/>
         <location line="+102"/>
         <source>Scenes</source>
@@ -7820,8 +7820,8 @@ The current organization and files will be preserved. Pending changes from the p
         <translation>场景</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesSourcePanel.qml" line="+159"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-84"/>
+        <location filename="../../qml/Solin/ScenesSourcePanel.qml" line="+159"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-84"/>
         <location line="+86"/>
         <source>Sources</source>
         <translation>来源</translation>
@@ -7874,7 +7874,7 @@ Add content, a camera, or another scene.</source>
         <translation>PTZ 控制</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesTransformDialog.qml" line="-33"/>
+        <location filename="../../qml/Solin/ScenesTransformDialog.qml" line="-33"/>
         <source>Precise transform</source>
         <translation>精确变换</translation>
     </message>
@@ -7914,7 +7914,7 @@ Add content, a camera, or another scene.</source>
         <translation>旋转</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-426"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-426"/>
         <source>Open scenes</source>
         <translation>打开场景</translation>
     </message>
@@ -8029,14 +8029,14 @@ Add content, a camera, or another scene.</source>
         <translation>毫秒</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesCanvas.qml" line="-3"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-436"/>
+        <location filename="../../qml/Solin/ScenesCanvas.qml" line="-3"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-436"/>
         <location line="+449"/>
         <source>Apply</source>
         <translation>应用</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-404"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-404"/>
         <source>Rename…</source>
         <translation>重命名……</translation>
     </message>
@@ -8299,19 +8299,19 @@ Add content, a camera, or another scene.</source>
         <translation>输出 · %1</translation>
     </message>
     <message>
-        <location filename="../../qml/ScenesRecordingPopover.qml" line="+112"/>
+        <location filename="../../qml/Solin/ScenesRecordingPopover.qml" line="+112"/>
         <source>Recording</source>
         <translation>录制</translation>
     </message>
     <message>
         <location line="+58"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-166"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-166"/>
         <source>Record</source>
         <translation>录制</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-61"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-61"/>
         <source>Stop recording</source>
         <translation>停止录制</translation>
     </message>
@@ -8322,19 +8322,19 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+58"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+58"/>
         <source>Starting…</source>
         <translation>正在启动……</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="+1"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="+1"/>
         <source>Finishing…</source>
         <translation>正在完成…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/ScenesWorkspace.qml" line="-55"/>
+        <location filename="../../qml/Solin/ScenesWorkspace.qml" line="-55"/>
         <source>Start recording</source>
         <translation>开始录制</translation>
     </message>
@@ -8690,7 +8690,7 @@ Add content, a camera, or another scene.</source>
 <context>
     <name>SettingsWidget</name>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+115"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+115"/>
         <source>Settings</source>
         <translation>设置</translation>
     </message>
@@ -8881,7 +8881,7 @@ Add content, a camera, or another scene.</source>
         <translation>将同步文件夹（Dropbox、OneDrive 等）显示为播放列表。</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+264"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+264"/>
         <source>Choose…</source>
         <translation>选择……</translation>
     </message>
@@ -8936,7 +8936,7 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">为开始、结束、暂停和恢复事件创建一个或多个快捷键。</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="+68"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="+68"/>
         <source>No shortcuts configured.</source>
         <translation>未配置快捷键。</translation>
     </message>
@@ -8946,7 +8946,7 @@ Add content, a camera, or another scene.</source>
         <translation>添加快捷键</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-7"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-7"/>
         <source>Edit</source>
         <translation>编辑</translation>
     </message>
@@ -8972,7 +8972,7 @@ Add content, a camera, or another scene.</source>
         <translation>关于</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsPage.qml" line="+184"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="+184"/>
         <source>Audio &amp; Video app for Kingdom Hall meetings.</source>
         <translation>用于王国聚会所聚会的音视频应用程序。</translation>
     </message>
@@ -9052,13 +9052,13 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">配置</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSectionHeader.qml" line="+28"/>
+        <location filename="../../qml/Solin/SettingsSectionHeader.qml" line="+28"/>
         <location line="+35"/>
         <source>Back to sections</source>
         <translation>返回章节</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsView.qml" line="+15"/>
+        <location filename="../../qml/Solin/SettingsView.qml" line="+15"/>
         <source>Search settings</source>
         <translation>搜索设置</translation>
     </message>
@@ -9265,7 +9265,7 @@ Add content, a camera, or another scene.</source>
         <translation>{year}年度经文已更新</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-134"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-134"/>
         <source>Select…</source>
         <translation>选择…</translation>
     </message>
@@ -9360,13 +9360,13 @@ Add content, a camera, or another scene.</source>
         <translation>共享和快捷方式</translation>
     </message>
     <message>
-        <location filename="../../qml/AppTextField.qml" line="+67"/>
+        <location filename="../../qml/Solin/AppTextField.qml" line="+67"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="-74"/>
         <source>Clear</source>
         <translation>清除</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsClockPicker.qml" line="+45"/>
+        <location filename="../../qml/Solin/SettingsClockPicker.qml" line="+45"/>
         <source>Choose hour</source>
         <translation>选择时间</translation>
     </message>
@@ -9386,7 +9386,7 @@ Add content, a camera, or another scene.</source>
         <translation>分钟 %1</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsCongregationDialog.qml" line="+31"/>
+        <location filename="../../qml/Solin/SettingsCongregationDialog.qml" line="+31"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+8"/>
         <source>Fill in from jw.org</source>
         <translation>从 jw.org 填充</translation>
@@ -9398,18 +9398,18 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+86"/>
-        <location filename="../../qml/SettingsRemoteSetup.qml" line="-201"/>
+        <location filename="../../qml/Solin/SettingsRemoteSetup.qml" line="-201"/>
         <source>Close</source>
         <translation>关闭</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsRow.qml" line="-88"/>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+30"/>
+        <location filename="../../qml/Solin/SettingsRow.qml" line="-88"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+30"/>
         <source>Search…</source>
         <translation>搜索…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsSelectionDialog.qml" line="+8"/>
+        <location filename="../../qml/Solin/SettingsSelectionDialog.qml" line="+8"/>
         <source>HH:mm</source>
         <translation>高:毫米</translation>
     </message>
@@ -9420,20 +9420,20 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location line="+6"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="+58"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="+58"/>
         <source>Apply</source>
         <translation>应用</translation>
     </message>
     <message>
         <location line="+4"/>
-        <location filename="../../qml/SettingsTimeDialog.qml" line="-2"/>
+        <location filename="../../qml/Solin/SettingsTimeDialog.qml" line="-2"/>
         <location filename="../../ui/qml/settings/catalogue.py" line="+37"/>
         <location line="+52"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="-144"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="-144"/>
         <source>Share Hotkey</source>
         <translation>共享快捷键</translation>
     </message>
@@ -9584,7 +9584,7 @@ Add content, a camera, or another scene.</source>
     </message>
     <message>
         <location filename="../../ui/qml/settings/catalogue.py" line="175"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="157"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="157"/>
         <source>Release notes</source>
         <translation>发行说明</translation>
     </message>
@@ -9594,45 +9594,45 @@ Add content, a camera, or another scene.</source>
         <translation>显示测试版发行说明</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="73"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="107"/>
-        <location filename="../../qml/SettingsPage.qml" line="164"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="73"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="107"/>
+        <location filename="../../qml/Solin/SettingsPage.qml" line="164"/>
         <source>Beta</source>
         <translation>测试版</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="74"/>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="108"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="74"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="108"/>
         <source>Installed</source>
         <translation>已安装</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Collapse</source>
         <translation>折叠</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="75"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="75"/>
         <source>Expand</source>
         <translation>展开</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="177"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="177"/>
         <source>Loading release notes…</source>
         <translation>正在加载发行说明…</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="188"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="188"/>
         <source>No release notes available.</source>
         <translation>暂无发行说明。</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="207"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="207"/>
         <source>Try again</source>
         <translation>重试</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="214"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="214"/>
         <source>Load 5 more</source>
         <translation>再加载 5 个版本</translation>
     </message>
@@ -9667,7 +9667,7 @@ Add content, a camera, or another scene.</source>
         <translation>没有适用于此系统的下载。</translation>
     </message>
     <message>
-        <location filename="../../qml/SettingsReleaseHistory.qml" line="226"/>
+        <location filename="../../qml/Solin/SettingsReleaseHistory.qml" line="226"/>
         <source>Open download page</source>
         <translation>打开下载页面</translation>
     </message>
@@ -9935,7 +9935,7 @@ Add content, a camera, or another scene.</source>
         <translation>会众</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+145"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+145"/>
         <source>Talk theme</source>
         <translation>演讲主题</translation>
     </message>
@@ -9994,20 +9994,20 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">▶  投影</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+53"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+41"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+53"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+41"/>
         <source>Styles</source>
         <translation>样式</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="+276"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="+276"/>
         <source>Delete preset</source>
         <translation>删除预设</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="+91"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="+91"/>
         <location line="+257"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+3"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+3"/>
         <source>Background</source>
         <translation>背景</translation>
     </message>
@@ -10221,7 +10221,7 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">示例：特别晚会</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+331"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+331"/>
         <source>Delete preset?</source>
         <translation>删除预设？</translation>
     </message>
@@ -10230,10 +10230,10 @@ Add content, a camera, or another scene.</source>
         <translation type="vanished">此预设将被永久删除。</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeInspector.qml" line="-314"/>
+        <location filename="../../qml/Solin/TalkThemeInspector.qml" line="-314"/>
         <location line="+74"/>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+170"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-332"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+170"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-332"/>
         <source>Text</source>
         <translation>文本</translation>
     </message>
@@ -10285,7 +10285,7 @@ Add content, a camera, or another scene.</source>
         <translation>找不到此预设的图片。</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeLayerPanel.qml" line="+20"/>
+        <location filename="../../qml/Solin/TalkThemeLayerPanel.qml" line="+20"/>
         <source>Front</source>
         <translation>最前面</translation>
     </message>
@@ -10323,7 +10323,7 @@ Add one when you are ready.</source>
         <translation>拖动图层可更改文本的前后顺序。</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemePresetLibrary.qml" line="-229"/>
+        <location filename="../../qml/Solin/TalkThemePresetLibrary.qml" line="-229"/>
         <source>Included styles</source>
         <translation>内置样式</translation>
     </message>
@@ -10343,13 +10343,13 @@ Add one when you are ready.</source>
         <translation>自定义主题并将其保存为预设。</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeSidebar.qml" line="+1"/>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="-1"/>
+        <location filename="../../qml/Solin/TalkThemeSidebar.qml" line="+1"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="-1"/>
         <source>Layers</source>
         <translation>图层</translation>
     </message>
     <message>
-        <location filename="../../qml/TalkThemeWorkspace.qml" line="+513"/>
+        <location filename="../../qml/Solin/TalkThemeWorkspace.qml" line="+513"/>
         <location line="+40"/>
         <source>Styles and layers</source>
         <translation>样式和图层</translation>
@@ -10949,7 +10949,7 @@ Add one when you are ready.</source>
 <context>
     <name>TimerStepper</name>
     <message>
-        <location filename="../../qml/TimerStepper.qml" line="+88"/>
+        <location filename="../../qml/Solin/TimerStepper.qml" line="+88"/>
         <location line="+41"/>
         <source>Double-click to edit</source>
         <translation>双击以编辑</translation>
@@ -10958,7 +10958,7 @@ Add one when you are ready.</source>
 <context>
     <name>TimerView</name>
     <message>
-        <location filename="../../qml/TimerView.qml" line="+78"/>
+        <location filename="../../qml/Solin/TimerView.qml" line="+78"/>
         <source>Timer</source>
         <translation>计时器</translation>
     </message>
@@ -12201,8 +12201,8 @@ Both devices must be on the same Wi-Fi network.</source>
 <context>
     <name>_PlaylistEditView</name>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-191"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+103"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-191"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+103"/>
         <source>Back</source>
         <translation>返回</translation>
     </message>
@@ -12212,12 +12212,12 @@ Both devices must be on the same Wi-Fi network.</source>
     </message>
     <message>
         <location line="+70"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+62"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+62"/>
         <source>Add Media</source>
         <translation>添加媒体</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="-45"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="-45"/>
         <source>Save playlist</source>
         <translation>保存播放列表</translation>
     </message>
@@ -12242,25 +12242,25 @@ Both devices must be on the same Wi-Fi network.</source>
         <translation>JW Library 播放列表……</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+10"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+10"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Local File...</source>
         <translation>本地文件...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Search JW.org...</source>
         <translation>搜索 JW.org...</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+8"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+8"/>
         <source>Add Song...</source>
         <translation>添加诗歌...</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistEditView.qml" line="+26"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+26"/>
         <source>Play all (in order)</source>
         <translation>全部播放（按顺序）</translation>
     </message>
@@ -12270,19 +12270,19 @@ Both devices must be on the same Wi-Fi network.</source>
         <translation>随机播放</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="+11"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+5"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="+11"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+5"/>
         <source>Section</source>
         <translation>板块</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location filename="../../qml/PlaylistEditView.qml" line="+1"/>
+        <location filename="../../qml/Solin/PlaylistEditView.qml" line="+1"/>
         <source>Add a new section</source>
         <translation>添加新板块</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-1515"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-1515"/>
         <source>Drag media files here or click  ＋  at the top
 Click an item to project it · Drag the grip ⠿ to reorder</source>
         <translation>将媒体文件拖放到此处或点击顶部的  ＋
@@ -12352,14 +12352,14 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
         <translation>标记</translation>
     </message>
     <message>
-        <location filename="../../qml/MeetingDetailView.qml" line="-51"/>
+        <location filename="../../qml/Solin/MeetingDetailView.qml" line="-51"/>
         <location line="+120"/>
-        <location filename="../../qml/PlaylistTreeView.qml" line="-291"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="-291"/>
         <source>Offline / Syncing</source>
         <translation>离线 / 同步中</translation>
     </message>
     <message>
-        <location filename="../../qml/PlaylistTreeView.qml" line="+324"/>
+        <location filename="../../qml/Solin/PlaylistTreeView.qml" line="+324"/>
         <source>Delete marker</source>
         <translation>删除标记</translation>
     </message>
@@ -14147,7 +14147,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_Section</name>
     <message>
-        <location filename="../../qml/AdvancedTimerPage.qml" line="-676"/>
+        <location filename="../../qml/Solin/AdvancedTimerPage.qml" line="-676"/>
         <source>TREASURES FROM GOD&apos;S WORD</source>
         <translation>上帝话语的宝藏</translation>
     </message>
@@ -14175,7 +14175,7 @@ Use the play button to project · Drag the grip ⠿ to reorder</source>
 <context>
     <name>_ShortcutSequenceEdit</name>
     <message>
-        <location filename="../../qml/SettingsShortcutDialog.qml" line="+98"/>
+        <location filename="../../qml/Solin/SettingsShortcutDialog.qml" line="+98"/>
         <source>Click to record</source>
         <translation>点击以录制</translation>
     </message>

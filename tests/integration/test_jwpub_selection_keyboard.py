@@ -76,7 +76,7 @@ def placement(qt_object_owner, request, all_controls_tab_focus):
         defer_load=True,
     )
     component = QQmlComponent(widget.engine(), widget)
-    url = QUrl.fromLocalFile(str(Path("src/solin/qml/PlacementKeyboardTest.qml").resolve()))
+    url = QUrl.fromLocalFile(str(Path("src/solin/qml/Solin/PlacementKeyboardTest.qml").resolve()))
     component.setData(
         b"""
         import QtQuick
