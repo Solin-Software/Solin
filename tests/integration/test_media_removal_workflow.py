@@ -9,7 +9,7 @@ import threading
 import time
 
 import pytest
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtWidgets import QMessageBox
 
 from solin.controllers.snapshot_write_coordinator import SnapshotWriteCoordinator
@@ -115,6 +115,29 @@ def _attach_meeting_store(meeting, store):
         MeetingTreeController._save_local_cache(meeting, **kwargs)
     )
     return snapshots
+
+
+def _wait_for_snapshot_result(snapshots, has_result):
+    loop = QEventLoop()
+    watchdog = QTimer(loop)
+    watchdog.setSingleShot(True)
+    watchdog.timeout.connect(loop.quit)
+
+    def on_result(*_args):
+        if has_result():
+            loop.quit()
+
+    write_completed = snapshots.writeCompleted.connect(on_result)
+    write_failed = snapshots.writeFailed.connect(on_result)
+    try:
+        if not has_result():
+            watchdog.start(5000)
+            loop.exec()
+    finally:
+        watchdog.stop()
+        snapshots.disconnect(write_completed)
+        snapshots.disconnect(write_failed)
+    assert has_result(), "The expected recovery snapshot result did not arrive"
 
 
 @pytest.mark.parametrize("scope, removed", [
@@ -542,52 +565,80 @@ def test_ordinary_edit_during_sync_binding_waits_for_local_recovery_copy(
     meeting, identity = synced_meeting
     store = MeetingTreeStore(tmp_path / "meeting-tree-cache.json")
     snapshots = _attach_meeting_store(meeting, store)
-    saves = []
+    release_write = threading.Event()
+    results = []
+
+    def record_result(tree_key, error=None):
+        results.append((tree_key, error))
+
+    meeting.storageSaved = SimpleNamespace(emit=record_result)
+    meeting.storageSaveFailed = SimpleNamespace(emit=record_result)
+    write_completed = snapshots.writeCompleted.connect(
+        lambda key, generation: MeetingTreeController._on_snapshot_write_completed(
+            meeting, key, generation,
+        )
+    )
+    write_failed = snapshots.writeFailed.connect(
+        lambda key, generation, message: MeetingTreeController._on_snapshot_write_failed(
+            meeting, key, generation, message,
+        )
+    )
     real_save = store.save
 
     def save_local(*args, **kwargs):
+        if not release_write.wait(5):
+            raise TimeoutError("Recovery snapshot writer was never released")
         if not storage_available:
             raise OSError("local snapshot unavailable")
-        saved = real_save(*args, **kwargs)
-        saves.append(saved.tree_key)
-        return saved
+        return real_save(*args, **kwargs)
+
+    def synced_title():
+        synced = meeting._sync_service.load_tree(str(tmp_path), identity)
+        assert synced is not None
+        return next(node for node in iter_nodes(synced.nodes) if node["id"] == "manual").get("title")
 
     store.save = save_local
     storage_key = meeting._snapshot_storage_key()
     meeting._sync_binding_writes = {storage_key: 0}
-    failures = []
-    meeting.storageSaveFailed = SimpleNamespace(emit=lambda *args: failures.append(args))
-    meeting._find_node("manual")["title"] = "Edited after sync activation"
+    manual = meeting._find_node("manual")
+    original_title = manual.get("title")
+    edited_title = "Edited after sync activation"
+    manual["title"] = edited_title
 
     try:
-        saved = MeetingTreeController._save(meeting)
+        assert not MeetingTreeController._save(meeting)
+        assert not results
+        assert storage_key in meeting._sync_binding_writes
+        assert not meeting._pending_sync_saves
+        assert synced_title() == original_title
+
+        release_write.set()
+        _wait_for_snapshot_result(snapshots, lambda: bool(results))
+
+        tree_key, error = results[0]
+        assert tree_key == meeting._tree_key
         if storage_available:
-            assert saved
-            assert saves
-            persisted = MeetingTreeStore(store.path).snapshot(meeting._tree_key)
+            assert error is None
+            persisted = MeetingTreeStore(store.path).snapshot(tree_key)
             assert persisted is not None
             assert persisted.linked_sync["enabled"]
             assert next(node for node in iter_nodes(persisted.nodes) if node["id"] == "manual")[
                 "title"
-            ] == "Edited after sync activation"
+            ] == edited_title
             assert storage_key not in meeting._sync_binding_writes
-            synced = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
-            assert synced is not None
-            assert next(node for node in iter_nodes(synced.nodes) if node["id"] == "manual")[
-                "title"
-            ] == "Edited after sync activation"
+            assert synced_title() == edited_title
         else:
-            assert not saved
-            assert failures and "local snapshot unavailable" in failures[-1][1]
+            assert error and "local snapshot unavailable" in error
             assert storage_key in meeting._sync_binding_writes
             assert not meeting._pending_sync_saves
-            synced = meeting._sync_service.load_tree(str(Path(meeting._sync_folder).parent), identity)
-            assert synced is not None
-            assert next(node for node in iter_nodes(synced.nodes) if node["id"] == "manual").get(
-                "title"
-            ) != "Edited after sync activation"
+            assert synced_title() == original_title
     finally:
-        snapshots.shutdown()
+        release_write.set()
+        try:
+            snapshots.shutdown()
+        finally:
+            snapshots.disconnect(write_completed)
+            snapshots.disconnect(write_failed)
 
 
 @pytest.mark.parametrize("remote_active, binding_pending", [
@@ -658,14 +709,13 @@ def test_uncertain_sync_edit_survives_restart_without_its_journal_operation(
     meeting, identity = synced_meeting
     store = MeetingTreeStore(tmp_path / "meeting-tree-cache.json")
     snapshots = _attach_meeting_store(meeting, store)
+    storage_key = meeting._snapshot_storage_key()
     completed = []
-    snapshots.writeCompleted.connect(
-        lambda key, generation: completed.append((key, generation))
+    write_completed = snapshots.writeCompleted.connect(
+        lambda key, generation: completed.append(generation) if key == storage_key else None
     )
     replica = meeting._sync_service._replica(Path(meeting._sync_folder))
     baseline = meeting._sync_snapshot
-    assert MeetingTreeController._save_local_cache(meeting, durable=True)
-    previous_outbox = set(replica.outbox_dir.glob("*.json"))
     real_publish = journal._publish
     real_read = Path.read_bytes
 
@@ -680,6 +730,11 @@ def test_uncertain_sync_edit_survives_restart_without_its_journal_operation(
         return real_read(path)
 
     try:
+        assert meeting._save_local_cache()
+        _wait_for_snapshot_result(snapshots, lambda: bool(completed))
+        completed.clear()
+        previous_outbox = set(replica.outbox_dir.glob("*.json"))
+
         with monkeypatch.context() as patch:
             patch.setattr(journal, "_publish", error_after_publication)
             patch.setattr(
@@ -691,13 +746,7 @@ def test_uncertain_sync_edit_survives_restart_without_its_journal_operation(
 
         assert result.removed_ids + result.pending_ids == ("nested",)
         assert meeting._sync_snapshot.durability_pending
-        storage_key = meeting._snapshot_storage_key()
-        expected_write = (storage_key, snapshots._generations[storage_key])
-        deadline = time.monotonic() + 3
-        while expected_write not in completed and time.monotonic() < deadline:
-            QCoreApplication.processEvents()
-            time.sleep(0.002)
-        assert expected_write in completed
+        _wait_for_snapshot_result(snapshots, lambda: bool(completed))
         persisted = MeetingTreeStore(store.path).snapshot(meeting._tree_key)
         assert persisted is not None
         assert persisted.linked_sync["staging_pending"]
@@ -729,7 +778,10 @@ def test_uncertain_sync_edit_survives_restart_without_its_journal_operation(
         assert recovered is not None
         assert "nested" not in {node["id"] for node in iter_nodes(recovered.nodes)}
     finally:
-        snapshots.shutdown()
+        try:
+            snapshots.shutdown()
+        finally:
+            snapshots.disconnect(write_completed)
 
 
 def test_uncertain_removal_without_local_recovery_is_reported_as_pending(
