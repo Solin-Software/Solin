@@ -35,7 +35,12 @@ def _assert_finite_starvation(*, contract: str) -> None:
 
         def progressing():
             media.apply_startup_transport()
-            return media.state == STATE_PLAYING and media.position_ms >= 200
+            # The native clock can advance before the startup intent is cleared.
+            return (
+                media.video_frame_ready
+                and media.state == STATE_PLAYING
+                and media.position_ms >= 200
+            )
 
         assert _wait_for(progressing), _observation(media)
         stall_after.set()
