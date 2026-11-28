@@ -1,35 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 import logging
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 
-def find_qmlcachegen() -> str:
-    tool = shutil.which("pyside6-qmlcachegen")
-    if tool:
-        return tool
-
-    suffix = ".exe" if sys.platform.startswith("win") else ""
-    sibling = Path(sys.executable).with_name(f"pyside6-qmlcachegen{suffix}")
-    if sibling.exists():
-        return str(sibling)
-
-    raise SystemExit(
-        "pyside6-qmlcachegen was not found. Install PySide6 in the active Python environment."
-    )
-
-
-QML_MODULE_URI = "Solin"
-QML_CACHE_MANIFEST = "qml-manifest.json"
 DEFAULT_QT_QML_MODULES = [
     "QtQml",
     "QtQuick",
@@ -61,93 +44,47 @@ MACOS_QT_RUNTIME_FRAMEWORKS = [
 ]
 
 
-def obfuscated_qml_name(qml_file: Path) -> str:
-    digest = hashlib.sha256(qml_file.name.encode("utf-8")).hexdigest()[:10]
-    return f"q_{digest}.qml"
+def find_pyside6_rcc() -> str:
+    suffix = ".exe" if sys.platform == "win32" else ""
+    sibling = Path(sys.executable).with_name(f"pyside6-rcc{suffix}")
+    if sibling.is_file():
+        return str(sibling)
+    if tool := shutil.which("pyside6-rcc"):
+        return tool
+    raise SystemExit("pyside6-rcc was not found. Install PySide6 in the active environment.")
 
 
-_TRANSLATOR_PRAGMA_RE = re.compile(r"(?m)^\s*pragma\s+Translator\s*:")
+def build_qml_archive(source_dir: Path, archive: Path) -> None:
+    """Package versioned module metadata and QML under Qt's default import root."""
+    source_dir = source_dir.resolve()
+    archive = archive.resolve()
+    if archive.is_relative_to(source_dir):
+        raise SystemExit(f"QML resource archive must be generated outside {source_dir}")
 
-
-def qml_source_with_translation_context(qml_file: Path) -> str:
-    source = qml_file.read_text(encoding="utf-8")
-    if _TRANSLATOR_PRAGMA_RE.search(source):
-        return source
-
-    context = json.dumps(qml_file.stem, ensure_ascii=False)
-    return f"pragma Translator: {context}\n{source}"
-
-
-def compile_qml_cache(source_dir: Path, output_dir: Path) -> list[Path]:
-    if not source_dir.is_dir():
-        raise SystemExit(f"QML source directory does not exist: {source_dir}")
-
-    qml_files = sorted(source_dir.glob("*.qml"))
-    if not qml_files:
-        raise SystemExit(f"No .qml files found in: {source_dir}")
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    for old_file in output_dir.iterdir():
-        if old_file.is_file() and old_file.suffix in {".qml", ".qmlc"}:
-            old_file.unlink()
-        elif old_file.is_file() and old_file.name.endswith(".qmlc.aotstats"):
-            old_file.unlink()
-
-    qml_map = {}
-    for qml_file in qml_files:
-        staged_name = obfuscated_qml_name(qml_file)
-        qml_map[qml_file.stem] = staged_name
-        (output_dir / staged_name).write_text(
-            qml_source_with_translation_context(qml_file),
-            encoding="utf-8",
-        )
-
-    qmldir = output_dir / "qmldir"
-    qmldir.write_text(
-        f"module {QML_MODULE_URI}\n"
-        + "\n".join(f"{type_name} 1.0 {staged_name}" for type_name, staged_name in qml_map.items())
-        + "\n",
-        encoding="utf-8",
+    files = sorted(
+        path
+        for path in source_dir.rglob("*")
+        if path.is_file() and (path.name == "qmldir" or path.suffix in {".qml", ".js", ".mjs"})
     )
-    (output_dir / QML_CACHE_MANIFEST).write_text(
-        json.dumps(
-            {
-                "schema": 1,
-                "sources": {
-                    qml_file.name: hashlib.sha256(qml_file.read_bytes()).hexdigest()
-                    for qml_file in qml_files
-                },
-            },
-            ensure_ascii=True,
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    if not any(path.name == "qmldir" for path in files) or not any(
+        path.suffix == ".qml" for path in files
+    ):
+        raise SystemExit(f"No QML modules found in: {source_dir}")
 
-    qmlcachegen = find_qmlcachegen()
-    for staged_qml in sorted(output_dir.glob("*.qml")):
-        subprocess.run(
-            [qmlcachegen, "--only-bytecode", str(staged_qml)],
-            check=True,
-            cwd=output_dir,
+    collection = ET.Element("RCC")
+    resource = ET.SubElement(collection, "qresource", prefix="/qt/qml")
+    for path in files:
+        ET.SubElement(resource, "file", alias=path.relative_to(source_dir).as_posix()).text = (
+            path.as_posix()
         )
 
-    for stats in output_dir.glob("*.qmlc.aotstats"):
-        stats.unlink()
-
-    compiled = sorted(output_dir.glob("*.qmlc"))
-    missing = []
-    for staged_name in qml_map.values():
-        compiled_name = f"{staged_name}c"
-        if not (output_dir / compiled_name).exists():
-            missing.append(compiled_name)
-    if missing:
-        raise SystemExit("Missing compiled QML cache files: " + ", ".join(missing))
-
-    return compiled
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=archive.parent) as directory:
+        qrc = Path(directory) / archive.with_suffix(".qrc").name
+        output = Path(directory) / archive.name
+        ET.ElementTree(collection).write(qrc, encoding="utf-8", xml_declaration=True)
+        subprocess.run([find_pyside6_rcc(), "--binary", str(qrc), "-o", str(output)], check=True)
+        output.replace(archive)
 
 
 def find_pyside6_dir() -> Path:
@@ -427,9 +364,9 @@ def stage_linux_qt_quick_libraries(output_dir: Path, qml_runtime_dir: Path) -> l
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate PySide6 QML bytecode cache files.")
+    parser = argparse.ArgumentParser(description="Package the app QML archive and stage the Qt Quick runtime.")
     parser.add_argument("--source-dir", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--qt-qml-output-dir", type=Path)
     parser.add_argument("--qt-library-output-dir", type=Path)
     parser.add_argument("--qt-framework-output-dir", type=Path)
@@ -441,10 +378,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    compiled = compile_qml_cache(args.source_dir.resolve(), args.output_dir.resolve())
-    print(f"Generated {len(compiled)} compiled QML cache file(s) in {args.output_dir}")
-    for path in compiled:
-        print(f"  {path.name}")
+    build_qml_archive(args.source_dir, args.archive)
+    print(f"Generated Qt resource archive: {args.archive}")
 
     if args.qt_qml_output_dir:
         staged = stage_qt_qml_runtime(

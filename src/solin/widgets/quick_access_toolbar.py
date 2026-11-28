@@ -36,6 +36,7 @@ from solin.ui.background_song_status import translate_background_song_status
 from solin.styles.theme import PALETTE
 from solin.ui.themed_tooltip import hide_themed_tooltip, show_themed_tooltip
 from solin.ui.qml.host import apply_qml_theme, configure_qml_host
+from solin.ui.qml.loader import QML_SHELL_MODULE_URI
 from solin.ui.qml.quick_toolbar import (
     QUICK_TOOLBAR_ICON_SVGS,
     QuickToolbarBridge,
@@ -121,6 +122,7 @@ def _configure_toolbar_surface(
     return configure_qml_host(
         surface,
         type_name="QuickAccessToolbar",
+        module_uri=QML_SHELL_MODULE_URI,
         clear_color=QColor(0, 0, 0, 0),
         image_providers={
             "icons": SvgIconProvider(

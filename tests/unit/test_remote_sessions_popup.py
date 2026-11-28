@@ -101,7 +101,7 @@ def test_remote_toolbar_control_keeps_the_maximum_pill_within_its_fixed_surface(
         _remote_control_visible=True,
     )
     toolbar = SimpleNamespace(_bridge=bridge)
-    source = Path("src/solin/qml/QuickAccessToolbar.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/Shell/QuickAccessToolbar.qml").read_text(encoding="utf-8")
 
     assert QuickAccessToolbar._calc_pill_width(toolbar) == 240
     assert source.index("id: obsMA") < source.index("id: scenesMA")

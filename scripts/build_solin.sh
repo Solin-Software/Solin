@@ -11,10 +11,10 @@ elif grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
 else
     WORK_ROOT="${OUTPUT_ROOT}"
 fi
-QML_CACHE_ROOT="${WORK_ROOT}/qmlcache"
-QML_APP_DIR="${QML_CACHE_ROOT}/solin/qml/Solin"
-QML_QT_DIR="${QML_CACHE_ROOT}/PySide6/qml"
-QT_LIBRARY_DIR="${QML_CACHE_ROOT}/qt-libs"
+QML_STAGE_ROOT="${WORK_ROOT}/qml-runtime"
+QML_ARCHIVE="${QML_STAGE_ROOT}/solin-qml.rcc"
+QML_QT_DIR="${QML_STAGE_ROOT}/PySide6/qml"
+QT_LIBRARY_DIR="${QML_STAGE_ROOT}/qt-libs"
 TRANSLATIONS_DIR="${WORK_ROOT}/translations/linux"
 DIST_DIR="${WORK_ROOT}/main.dist"
 FINAL_DIST_DIR="${OUTPUT_ROOT}/main.dist"
@@ -210,11 +210,11 @@ if ldd "${SIDEVIEW_NATIVE}" | grep -q 'not found'; then
     fail "The installed SideView backend has unresolved shared-library dependencies."
 fi
 
-rm -rf "${QML_CACHE_ROOT}" "${DIST_DIR}" "${WORK_ROOT}/main.build"
+rm -rf "${QML_STAGE_ROOT}" "${DIST_DIR}" "${WORK_ROOT}/main.build"
 
-"${PYTHON}" scripts/compile_qml_cache.py \
+"${PYTHON}" scripts/package_qml_runtime.py \
     --source-dir src/solin/qml \
-    --output-dir "${QML_APP_DIR}" \
+    --archive "${QML_ARCHIVE}" \
     --qt-qml-output-dir "${QML_QT_DIR}" \
     --qt-library-output-dir "${QT_LIBRARY_DIR}" \
     --qt-qml-module QtQuick/Controls/impl \
@@ -258,7 +258,7 @@ fi
     --include-data-dir=src/solin/resources/assets=solin/resources/assets \
     --include-data-dir=src/solin/resources/remote_control=solin/resources/remote_control \
     --include-data-dir=src/solin/resources/translations/locales=solin/resources/translations/locales \
-    --include-data-dir="${QML_APP_DIR}=solin/qml/Solin" \
+    --include-data-files="${QML_ARCHIVE}=solin/qml/solin-qml.rcc" \
     --include-data-dir="${QML_QT_DIR}=PySide6/qml" \
     "${qml_binary_args[@]}" \
     --include-data-files="${TRANSLATIONS_DIR}/*.qm=solin/resources/translations/" \
@@ -269,21 +269,16 @@ fi
 [[ -x "${DIST_DIR}/Solin.bin" ]] || fail "Nuitka did not produce ${DIST_DIR}/Solin.bin."
 [[ -f "${DIST_DIR}/sideview/libsideview_native.so" ]] || fail \
     "The SideView Linux backend was not packaged."
-[[ -f "${DIST_DIR}/solin/qml/Solin/qmldir" ]] || fail \
-    "Compiled app QML metadata was not packaged."
-find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qmlc' -print -quit | grep -q . || fail \
-    "No compiled app QML cache was packaged."
-
-find "${DIST_DIR}/solin/qml" -maxdepth 1 -type f \
-    \( -name '*.qml' -o -name '*.qmlc' -o -name qmldir \) -delete
-find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -type f -name '*.qml' -delete
+[[ -f "${DIST_DIR}/solin/qml/solin-qml.rcc" ]] || fail \
+    "The Solin QML resource archive was not packaged."
+if find "${DIST_DIR}/solin/qml" -type f ! -name 'solin-qml.rcc' -print -quit | grep -q .; then
+    fail "Unexpected loose Solin QML files in the standalone distribution."
+fi
 
 # Omit the optional TIFF plugin: some PySide6 wheels require libtiff.so.5,
 # while Ubuntu 26.04 supplies libtiff.so.6. Never alias incompatible ABIs.
 rm -f "${DIST_DIR}/PySide6/qt-plugins/imageformats/libqtiff.so"
 
-find "${DIST_DIR}/solin/qml/Solin" -maxdepth 1 -name '*.qml' -print -quit | grep -q . && fail \
-    "Raw app QML source remained in the standalone distribution."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/qmldir" ]] || fail "QtQuick QML runtime is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQml/qmldir" ]] || fail "QtQml QML runtime is missing."
 [[ -f "${DIST_DIR}/PySide6/qml/QtQuick/Controls/libqtquickcontrols2plugin.so" ]] || fail \

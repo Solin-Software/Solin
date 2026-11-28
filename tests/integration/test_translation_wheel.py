@@ -91,6 +91,12 @@ def test_sdist_to_wheel_contains_current_catalogs_and_runs_without_compilation(t
     installed = tmp_path / "site-packages"
     with ZipFile(wheel) as archive:
         files = {PurePosixPath(name) for name in archive.namelist() if not name.endswith("/")}
+        assert {
+            PurePosixPath("solin/qml/Solin/qmldir"),
+            PurePosixPath("solin/qml/Solin/TimerToggle.qml"),
+            PurePosixPath("solin/qml/Solin/Shell/qmldir"),
+            PurePosixPath("solin/qml/Solin/Shell/QuickAccessToolbar.qml"),
+        } <= files
         translation_root = PurePosixPath("solin/resources/translations")
         payload = {path.relative_to(translation_root) for path in files if path.is_relative_to(translation_root)}
         expected = {PurePosixPath(f"{catalog}.qm") for catalog in catalogs}

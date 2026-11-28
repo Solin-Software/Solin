@@ -1,33 +1,29 @@
 from __future__ import annotations
 
 import pytest
+from PySide6.QtCore import QFile, QIODevice, QResource
 
-from scripts import compile_qml_cache
-
-
-def test_qml_source_preserves_original_translation_context(tmp_path):
-    qml_file = tmp_path / "AdvancedTimerPage.qml"
-    qml_file.write_text(
-        'import QtQuick\nText { text: qsTr("Clock face") }\n',
-        encoding="utf-8",
-    )
-
-    staged = compile_qml_cache.qml_source_with_translation_context(qml_file)
-
-    assert staged.startswith('pragma Translator: "AdvancedTimerPage"\n')
-    assert 'qsTr("Clock face")' in staged
+from scripts import package_qml_runtime
+from tests._paths import REPO_ROOT
 
 
-def test_qml_source_keeps_explicit_translation_context(tmp_path):
-    qml_file = tmp_path / "TimerView.qml"
-    source = (
-        'pragma Translator: "SharedTimer"\n'
-        'import QtQuick\n'
-        'Text { text: qsTr("Timer") }\n'
-    )
-    qml_file.write_text(source, encoding="utf-8")
+def test_app_qml_archive_exposes_the_versioned_modules(tmp_path):
+    source_dir = REPO_ROOT / "src" / "solin" / "qml"
+    archive = tmp_path / "output with spaces" / "solin-qml.rcc"
+    package_qml_runtime.build_qml_archive(source_dir, archive)
 
-    assert compile_qml_cache.qml_source_with_translation_context(qml_file) == source
+    assert QResource.registerResource(str(archive))
+    try:
+        for relative in ("Solin/qmldir", "Solin/TimerToggle.qml",
+                         "Solin/Shell/qmldir", "Solin/Shell/QuickAccessToolbar.qml"):
+            resource = QFile(f":/qt/qml/{relative}")
+            assert resource.open(QIODevice.OpenModeFlag.ReadOnly)
+            try:
+                assert bytes(resource.readAll()) == (source_dir / relative).read_bytes()
+            finally:
+                resource.close()
+    finally:
+        QResource.unregisterResource(str(archive))
 
 
 def test_find_qt_library_dir_skips_candidates_without_required_frameworks(tmp_path, monkeypatch):
@@ -37,12 +33,12 @@ def test_find_qt_library_dir_skips_candidates_without_required_frameworks(tmp_pa
     (framework_lib / "QtQuickLayouts.framework").mkdir(parents=True)
 
     monkeypatch.setattr(
-        compile_qml_cache,
+        package_qml_runtime,
         "qt_library_dir_candidates",
         lambda: [empty_lib, framework_lib],
     )
 
-    assert compile_qml_cache.find_qt_library_dir(["QtQuickLayouts.framework"]) == framework_lib
+    assert package_qml_runtime.find_qt_library_dir(["QtQuickLayouts.framework"]) == framework_lib
 
 
 def test_find_qt_library_dir_reports_missing_required_frameworks(tmp_path, monkeypatch):
@@ -50,13 +46,13 @@ def test_find_qt_library_dir_reports_missing_required_frameworks(tmp_path, monke
     empty_lib.mkdir(parents=True)
 
     monkeypatch.setattr(
-        compile_qml_cache,
+        package_qml_runtime,
         "qt_library_dir_candidates",
         lambda: [empty_lib],
     )
 
     with pytest.raises(SystemExit, match="PySide6 Qt library directory was not found"):
-        compile_qml_cache.find_qt_library_dir(["QtQuickLayouts.framework"])
+        package_qml_runtime.find_qt_library_dir(["QtQuickLayouts.framework"])
 
 
 def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(tmp_path, monkeypatch):
@@ -80,15 +76,15 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
         for filename in filenames:
             (module_dir / filename).write_text(filename, encoding="utf-8")
 
-    monkeypatch.setattr(compile_qml_cache, "find_qt_qml_runtime_dir", lambda: source_root)
+    monkeypatch.setattr(package_qml_runtime, "find_qt_qml_runtime_dir", lambda: source_root)
 
-    staged = compile_qml_cache.stage_qt_qml_runtime(
+    staged = package_qml_runtime.stage_qt_qml_runtime(
         output_root,
-        compile_qml_cache.DEFAULT_QT_QML_MODULES,
+        package_qml_runtime.DEFAULT_QT_QML_MODULES,
     )
 
     assert {path.relative_to(output_root).as_posix() for path in staged} == set(
-        compile_qml_cache.DEFAULT_QT_QML_MODULES
+        package_qml_runtime.DEFAULT_QT_QML_MODULES
     )
     assert (output_root / "QtQml" / "libqmlplugin.dylib").exists()
     assert (output_root / "QtQuick" / "libqtquick2plugin.dylib").exists()
@@ -112,7 +108,7 @@ def test_stage_qt_qml_runtime_copies_selected_modules_without_unused_submodules(
 def test_stage_macos_qt_quick_frameworks_stages_flat_runtime_libraries(tmp_path, monkeypatch):
     source_root = tmp_path / "PySide6" / "Qt" / "lib"
     output_root = tmp_path / "out"
-    required = compile_qml_cache.MACOS_QT_RUNTIME_FRAMEWORKS
+    required = package_qml_runtime.MACOS_QT_RUNTIME_FRAMEWORKS
     for name in required + [
         "NotQt.framework",
         "QtPdf.framework",
@@ -124,9 +120,9 @@ def test_stage_macos_qt_quick_frameworks_stages_flat_runtime_libraries(tmp_path,
         binary.parent.mkdir(parents=True)
         binary.write_text(name, encoding="utf-8")
 
-    monkeypatch.setattr(compile_qml_cache, "find_qt_library_dir", lambda _patterns: source_root)
+    monkeypatch.setattr(package_qml_runtime, "find_qt_library_dir", lambda _patterns: source_root)
 
-    staged = compile_qml_cache.stage_macos_qt_quick_frameworks(output_root)
+    staged = package_qml_runtime.stage_macos_qt_quick_frameworks(output_root)
 
     staged_names = {path.name for path in staged}
     assert {name.removesuffix(".framework") for name in required} == staged_names
@@ -144,10 +140,10 @@ def test_stage_macos_qt_quick_frameworks_reports_missing_required_dependency(tmp
     source_root = tmp_path / "PySide6" / "Qt" / "lib"
     (source_root / "QtCore.framework").mkdir(parents=True)
 
-    monkeypatch.setattr(compile_qml_cache, "find_qt_library_dir", lambda _patterns: source_root)
+    monkeypatch.setattr(package_qml_runtime, "find_qt_library_dir", lambda _patterns: source_root)
 
     with pytest.raises(SystemExit, match="Required macOS Qt framework"):
-        compile_qml_cache.stage_macos_qt_quick_frameworks(tmp_path / "out")
+        package_qml_runtime.stage_macos_qt_quick_frameworks(tmp_path / "out")
 
 
 def test_stage_windows_qt_quick_libraries_includes_required_runtime(
@@ -164,9 +160,9 @@ def test_stage_windows_qt_quick_libraries_includes_required_runtime(
         "Qt6QuickLayouts.dll",
     ):
         (source_root / name).write_text(name, encoding="utf-8")
-    monkeypatch.setattr(compile_qml_cache, "find_pyside6_dir", lambda: source_root)
+    monkeypatch.setattr(package_qml_runtime, "find_pyside6_dir", lambda: source_root)
 
-    staged = compile_qml_cache.stage_windows_qt_quick_libraries(tmp_path / "out")
+    staged = package_qml_runtime.stage_windows_qt_quick_libraries(tmp_path / "out")
 
     assert {path.name for path in staged} == {
         "opengl32sw.dll",
@@ -184,10 +180,10 @@ def test_stage_windows_qt_quick_libraries_requires_software_opengl_fallback(
     source_root = tmp_path / "PySide6"
     source_root.mkdir()
     (source_root / "Qt6Multimedia.dll").write_text("runtime", encoding="utf-8")
-    monkeypatch.setattr(compile_qml_cache, "find_pyside6_dir", lambda: source_root)
+    monkeypatch.setattr(package_qml_runtime, "find_pyside6_dir", lambda: source_root)
 
     with pytest.raises(SystemExit, match="software OpenGL fallback"):
-        compile_qml_cache.stage_windows_qt_quick_libraries(tmp_path / "out")
+        package_qml_runtime.stage_windows_qt_quick_libraries(tmp_path / "out")
 
 
 def test_stage_linux_qt_quick_libraries_copies_only_transitive_qt_dependencies(
@@ -216,17 +212,17 @@ def test_stage_linux_qt_quick_libraries_copies_only_transitive_qt_dependencies(
     dependencies[(source_root / "libQt6Core.so.6").resolve()] = []
 
     monkeypatch.setattr(
-        compile_qml_cache,
+        package_qml_runtime,
         "find_qt_library_dir",
         lambda _patterns: source_root,
     )
     monkeypatch.setattr(
-        compile_qml_cache,
+        package_qml_runtime,
         "linux_shared_library_dependencies",
         lambda binary: dependencies[binary.resolve()],
     )
 
-    staged = compile_qml_cache.stage_linux_qt_quick_libraries(output_root, qml_root)
+    staged = package_qml_runtime.stage_linux_qt_quick_libraries(output_root, qml_root)
 
     assert {path.name for path in staged} == {
         "libQt6Core.so.6",

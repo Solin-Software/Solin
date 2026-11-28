@@ -78,7 +78,7 @@ def test_playlist_icons_stay_embedded_in_python():
 
 
 def test_meeting_restore_button_visibility_tooltip_and_action_are_wired():
-    source = Path("src/solin/qml/MeetingDetailView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/MeetingDetailView.qml").read_text(encoding="utf-8")
 
     assert "visible: root.hasController && controller.canonicalRestoreAvailable" in source
     assert '"Restore official meeting content"' in source
@@ -86,7 +86,7 @@ def test_meeting_restore_button_visibility_tooltip_and_action_are_wired():
 
 
 def test_whole_meeting_transitions_use_a_blocking_indeterminate_progress_bar():
-    source = Path("src/solin/qml/MeetingDetailView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/MeetingDetailView.qml").read_text(encoding="utf-8")
 
     assert "visible: root.hasController && controller.syncBusy" in source
     assert "controller.syncBusyMessage" in source
@@ -94,7 +94,7 @@ def test_whole_meeting_transitions_use_a_blocking_indeterminate_progress_bar():
 
 
 def test_media_preparation_feedback_stays_local_to_its_tree_row():
-    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/PlaylistTreeView.qml").read_text(encoding="utf-8")
 
     assert "running: mediaRoot.operationActive" in source
     assert "mediaRoot.operationProgress" in source
@@ -103,7 +103,7 @@ def test_media_preparation_feedback_stays_local_to_its_tree_row():
 
 
 def test_media_overflow_menu_exposes_shared_add_to_destination_action():
-    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/PlaylistTreeView.qml").read_text(encoding="utf-8")
 
     assert 'objectName: "mediaItemAddToDestinationAction"' in source
     assert 'text: qsTranslate("MediaDestinationDialog", "Add to…")' in source
@@ -111,7 +111,7 @@ def test_media_overflow_menu_exposes_shared_add_to_destination_action():
 
 
 def test_media_overflow_menu_exposes_shared_set_as_idle_action():
-    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/PlaylistTreeView.qml").read_text(encoding="utf-8")
 
     assert 'objectName: "mediaItemSetAsIdleAction"' in source
     assert 'text: qsTranslate("ProjectionBar", "Set as idle screen")' in source
@@ -119,7 +119,7 @@ def test_media_overflow_menu_exposes_shared_set_as_idle_action():
 
 
 def test_shared_tree_keeps_shell_theme_contract_and_native_drag_feedback():
-    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/PlaylistTreeView.qml").read_text(encoding="utf-8")
 
     assert "property color previewBg:" in source
     assert "property color previewBorder:" in source
@@ -129,7 +129,7 @@ def test_shared_tree_keeps_shell_theme_contract_and_native_drag_feedback():
 
 
 def test_drag_grips_and_overflow_buttons_share_secondary_control_colors():
-    source = Path("src/solin/qml/PlaylistTreeView.qml").read_text(encoding="utf-8")
+    source = Path("src/solin/qml/Solin/PlaylistTreeView.qml").read_text(encoding="utf-8")
 
     assert "component DragGrip: Image" in source
     assert "root.secondaryControl))" in source

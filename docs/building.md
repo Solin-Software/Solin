@@ -11,6 +11,14 @@ same compiler through setuptools, with a pinned PySide6 build dependency for
 isolated builds. See [Translations](translations.md#development-and-builds) for
 development preparation and the source/distribution resource contract.
 
+`src/solin/qml` is the import root for the versioned `Solin` and `Solin.Shell`
+modules. When adding a named QML type, declare it in its module's `qmldir`.
+Source runs and wheels load these files directly. Standalone builds use
+`scripts/package_qml_runtime.py` and PySide6's `pyside6-rcc` to embed the same
+modules under `qrc:/qt/qml` in `solin/qml/solin-qml.rcc`. The packaged
+`--verify-qml-runtime` smoke test opens both modules through the shared QML host
+and checks their resource URLs.
+
 Playback and scenes use the supervised libobs sidecar. Source runs and wheel
 installations launch its Python module; standalone builds launch the Solin
 executable with

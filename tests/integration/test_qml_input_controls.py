@@ -31,7 +31,7 @@ def _controls_widget(source, *, parent=None):
         widget, type_name="AppTextField", clear_color="#000000",
         mouse_tracking=True, dismiss_text_focus_on_pointer_press=True, defer_load=True,
     )
-    url = QUrl.fromLocalFile(str(Path("src/solin/qml/ControlsTest.qml").resolve()))
+    url = QUrl.fromLocalFile(str(Path("src/solin/qml/Solin/ControlsTest.qml").resolve()))
     component = QQmlComponent(widget.engine())
     component.setParent(widget)
     component.setData(source, url)

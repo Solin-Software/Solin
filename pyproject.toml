@@ -61,7 +61,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 solin = [
-    "qml/*.qml",
+    "qml/**/*.qml",
+    "qml/**/qmldir",
+    "qml/**/*.js",
+    "qml/**/*.mjs",
     "resources/remote_control/*",
     "resources/remote_control/shared/scripts/*",
     "resources/remote_control/shared/styles/*",

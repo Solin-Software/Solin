@@ -519,7 +519,7 @@ def test_qml_presentation_adapters_live_under_ui_qml():
         "QQuickWidget",
         "addImageProvider",
         "setContextProperty",
-        "load_qml_type",
+        "loadFromModule",
         "rootObject",
     ):
         if fragment in meetings_source:
@@ -558,7 +558,7 @@ def test_media_trees_have_one_complete_snapshot_reconciliation_boundary():
     for path in removed_legacy_paths:
         assert not path.exists(), f"Legacy media-tree implementation still exists: {path}"
 
-    qml_path = PROJECT_ROOT / "src" / "solin" / "qml" / "PlaylistTreeView.qml"
+    qml_path = PROJECT_ROOT / "src" / "solin" / "qml" / "Solin" / "PlaylistTreeView.qml"
     qml_source = qml_path.read_text(encoding="utf-8")
     assert "treeSource" in qml_source
     assert "component DropList" in qml_source

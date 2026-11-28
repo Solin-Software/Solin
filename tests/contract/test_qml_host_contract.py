@@ -20,11 +20,10 @@ def _python_sources() -> list[Path]:
 
 
 def test_qml_types_load_through_the_shared_host_or_loader():
-    allowed = {_QML_HOST, _QML_LOADER}
     offenders = [
         path.relative_to(REPO_ROOT)
         for path in _python_sources()
-        if path not in allowed and "load_qml_type(" in path.read_text(encoding="utf-8")
+        if path != _QML_LOADER and ".loadFromModule(" in path.read_text(encoding="utf-8")
     ]
 
     assert offenders == []
