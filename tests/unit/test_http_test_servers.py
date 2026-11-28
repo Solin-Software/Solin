@@ -152,6 +152,32 @@ def test_media_http_pacing_excludes_the_deliberate_stall(tmp_path, paced_clip_cl
     assert duration - 0.01 - 1e-9 <= clock.now - began - 1.5 <= duration + clock.oversleep + 1e-9
 
 
+def test_media_http_sequential_stall_splits_response_at_the_requested_offset(
+    tmp_path, paced_clip_clock,
+):
+    _clock, completed = paced_clip_clock
+    data = bytes(range(256)) * 64
+    path = tmp_path / "clip.bin"
+    path.write_bytes(data)
+    cutoff = 4096 + 137
+    stalled, release = threading.Event(), threading.Event()
+    with media_fixture._serve_clip(
+        path, accept_ranges=False, stall_offset=cutoff, stalled=stalled, release_read=release,
+    ) as url:
+        host, route = url.removeprefix("http://").split("/", 1)
+        with closing(HTTPConnection(host, timeout=2)) as client:
+            # Decoder range probes must not be able to bypass the barrier.
+            client.request("GET", f"/{route}", headers={"Range": f"bytes={cutoff + 1}-"})
+            response = client.getresponse()
+            assert response.status == 200
+            assert response.read(cutoff) == data[:cutoff]
+            assert stalled.wait(2), "The origin did not acknowledge the fixed offset"
+            assert not completed.is_set(), "The response finished before the release"
+            release.set()
+            assert response.read() == data[cutoff:]
+            assert completed.wait(2), "The origin did not finish the released response"
+
+
 @pytest.mark.parametrize("start, chunk_origin, cutoff", [(77, None, 4173), (0, 44, 44), (77, 44, 4140)])
 def test_media_http_pacing_preserves_disconnect_offset_and_range_resume(
     tmp_path, paced_clip_clock, start, chunk_origin, cutoff,

@@ -9,6 +9,7 @@ import struct
 
 AV_FRAME_NUMBER_BITS = 8
 AV_FRAME_NUMBER_ROWS = 4
+AV_FRAME_RATE = 10
 AV_LOW_TONE_HZ = 400
 AV_HIGH_TONE_HZ = 1000
 
@@ -20,13 +21,16 @@ def write_av_clip(
     alternate_colors: bool = False,
     constant_frequency: int | None = None,
     number_frames: bool = False,
-) -> None:
-    """Write red and blue video with PCM tones and optional per-frame markers."""
-    width, fps, rate = 64, 10, 48000
+    silent_lead_frames: int = 0,
+) -> tuple[int, ...]:
+    """Write the AVI and return the byte offset after each complete video/PCM pair."""
+    width, fps, rate = 64, AV_FRAME_RATE, 48000
     frame_size = width * width * 3
     frame_count = duration * fps
     if number_frames and frame_count > 1 << AV_FRAME_NUMBER_BITS:
         raise ValueError("Clip has too many frames for unique frame numbers")
+    if not 0 <= silent_lead_frames <= frame_count:
+        raise ValueError("Silent lead must fit in the clip")
     samples_per_frame = rate // fps
 
     def chunk(kind, data):
@@ -96,6 +100,7 @@ def write_av_clip(
     headers = chunk(b"LIST", b"hdrl" + chunk(b"avih", header) + video_list + audio_list)
     tile_size = width // AV_FRAME_NUMBER_BITS * 3
     payload, index, offset = [], [], 4
+    frame_ends = []
     for frame in range(frame_count):
         blue = (frame // fps) % 2 == 1 if alternate_colors else frame >= 2 * fps
         pixel = b"\xff\0\0" if blue else b"\0\0\xff"
@@ -110,18 +115,26 @@ def write_av_clip(
             picture = strip + pixel * (width * (width - 2 * AV_FRAME_NUMBER_ROWS)) + strip
         else:
             picture = pixel * (width * width)
-        frequency = constant_frequency
-        if frequency is None:
-            frequency = AV_HIGH_TONE_HZ if blue else AV_LOW_TONE_HZ
-        pcm = b"".join(
-            struct.pack("<h", round(16000 * math.sin(2 * math.pi * frequency * i / rate)))
-            for i in range(samples_per_frame)
-        )
+        if frame < silent_lead_frames:
+            pcm = bytes(samples_per_frame * 2)
+        else:
+            frequency = constant_frequency
+            if frequency is None:
+                frequency = AV_HIGH_TONE_HZ if blue else AV_LOW_TONE_HZ
+            pcm = b"".join(
+                struct.pack("<h", round(16000 * math.sin(2 * math.pi * frequency * i / rate)))
+                for i in range(samples_per_frame)
+            )
         for kind, data in ((b"00db", picture), (b"01wb", pcm)):
             entry = chunk(kind, data)
             payload.append(entry)
             index.append(struct.pack("<4sIII", kind, 0x10, offset, len(data)))
             offset += len(entry)
-    data = b"AVI " + headers + chunk(b"LIST", b"movi" + b"".join(payload))
+        frame_ends.append(offset)
+    prefix = b"AVI " + headers
+    data = prefix + chunk(b"LIST", b"movi" + b"".join(payload))
     data += chunk(b"idx1", b"".join(index))
     path.write_bytes(b"RIFF" + struct.pack("<I", len(data)) + data)
+    # The tracked offsets start after the RIFF and LIST chunk headers.
+    movi_payload_offset = 8 + len(prefix) + 8
+    return tuple(movi_payload_offset + end for end in frame_ends)

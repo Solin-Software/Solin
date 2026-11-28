@@ -21,6 +21,7 @@ import pytest
 from tests.fixtures.av_clip import (
     AV_FRAME_NUMBER_BITS,
     AV_FRAME_NUMBER_ROWS,
+    AV_FRAME_RATE,
     AV_HIGH_TONE_HZ,
     AV_LOW_TONE_HZ,
     write_av_clip,
@@ -448,17 +449,32 @@ def _av_starvation(speed):
     from solin.core.scenes.libobs_media_source import STATE_PLAYING
 
     with _native_media() as (runtime, media, path), ExitStack() as stack:
-        write_av_clip(path, duration=12, number_frames=True)
-        stall, stalled, release = Event(), Event(), Event()
+        frame_ends = write_av_clip(
+            path, duration=12, number_frames=True, silent_lead_frames=AV_FRAME_RATE,
+        )
+        # Deliver video first, then enough complete PCM packets to observe the
+        # initial tone before the 2 s A/V marker. Range probes must not bypass the hold.
+        prefix_frames = 3 * AV_FRAME_RATE // 2
+        stalled, release = Event(), Event()
         url = stack.enter_context(
-            _serve_clip(path, stall_after=stall, stalled=stalled, release_read=release)
+            _serve_clip(
+                path, accept_ranges=False, stall_offset=frame_ends[prefix_frames - 1],
+                stalled=stalled, release_read=release,
+            )
         )
         stack.callback(media.close)
         stack.callback(release.set)
         assert media.open(url, speed_percent=speed)
         output = _observe_av_output(runtime, media, stack, resumed=release)
-        assert _wait_for(lambda: _playing(media, 400), timeout=8), media.position_ms
-        stall.set()
+
+        def initial_output_ready():
+            _poll(media)
+            return {"low_tone", "red_frame"} <= output().signals.keys()
+
+        assert _wait_for(initial_output_ready, timeout=8), (
+            "Program output did not establish both initial A/V signals",
+            media.state, media.position_ms, output().signals,
+        )
         assert stalled.wait(4), "Origin never reached its read barrier"
         previous = _poll(media)
         unchanged_since = time.monotonic()
@@ -479,7 +495,6 @@ def _av_starvation(speed):
         assert abs(_poll(media) - frozen_at) <= 100, (frozen_at, media.position_ms)
         assert _capture_prepared_source(runtime, media)["center_bgra"] == frame_before
         before_release = output().signals
-        assert {"low_tone", "red_frame"} <= before_release.keys(), before_release
         assert not {"high_tone", "blue_frame"} & before_release.keys(), (
             "Playback reached the transition before the HTTP stall", before_release,
         )

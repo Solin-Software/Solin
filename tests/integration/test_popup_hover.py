@@ -47,7 +47,14 @@ from solin.widgets.common.toolbar_panel import ToolbarPanel
 from solin.widgets.quick_access_toolbar import QuickAccessToolbar
 from solin.widgets.obs_scene_popup import OBSScenePopup, _SceneChipButton
 from solin.widgets.scenes.control_popup import SceneControlPopup
-from tests._qt import dispose_widget, mouse_click, mouse_move, wait_for_geometry, wait_until
+from tests._qt import (
+    dispose_widget,
+    mouse_click,
+    mouse_move,
+    wait_for_geometry,
+    wait_for_input_exposure,
+    wait_until,
+)
 
 
 def _wait_until(predicate, timeout=2000):
@@ -976,6 +983,7 @@ def test_qml_toolbar_hover_click_keyboard_and_tooltip_share_native_popup(
     button = root.findChild(QQuickItem, button_name)
     assert button is not None
     # Hover entry requires a transition from outside the loaded QML surface.
+    wait_for_input_exposure(parent, toolbar)
     mouse_move(parent, QPoint(20, 20), sync_cursor=True)
     wait_until(
         lambda: (
@@ -1017,6 +1025,7 @@ def test_qml_toolbar_hover_click_keyboard_and_tooltip_share_native_popup(
     popup.close()
     _activate(parent)
     toolbar._reset_qml_pointer_cursor()
+    wait_for_input_exposure(parent, toolbar)
     mouse_move(parent, QPoint(20, 20), sync_cursor=True)
     wait_until(lambda: root.property("tooltipItem") is None, description="toolbar hover exit")
     tooltip_spy = QSignalSpy(toolbar._bridge.tooltipRequested)

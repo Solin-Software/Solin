@@ -75,10 +75,15 @@ def _serve_clip(
     stalled: Event | None = None,
     release_read: Event | None = None,
     chunk_origin: int | None = None,
+    stall_offset: int | None = None,
 ) -> Iterator[str]:
     from tests._http import ThreadingLoopbackHTTPServer
 
     data = path.read_bytes()
+    if stall_offset is not None:
+        assert not accept_ranges and stall_after is None, "A fixed stall requires a sequential read"
+        assert 0 < stall_offset < len(data), "A fixed stall must split the response body"
+        assert stalled is not None and release_read is not None, "A fixed stall requires both events"
     disconnected = Event()
     request_lock = Lock()
     latest_request = 0
@@ -121,9 +126,13 @@ def _serve_clip(
                 self.close_connection = True
                 return
             try:
-                if (disconnect_once and not disconnected.is_set()) or stall_after is not None:
-                    # Feed probing normally. Once playback moves, interrupt its
-                    # current read at an exact byte offset, not a discarded probe.
+                if (
+                    (disconnect_once and not disconnected.is_set())
+                    or stall_after is not None
+                    or stall_offset is not None
+                ):
+                    # Pace the transfer so the decoder can consume it while the
+                    # origin controls when the current read runs out of bytes.
                     pacing_started = time.monotonic()
                     paced_from = start
                     origin = start if chunk_origin is None else chunk_origin
@@ -133,6 +142,8 @@ def _serve_clip(
                         # complete codec packets, without relying on corruption.
                         boundary = origin + ((offset - origin) // 4096 + 1) * 4096
                         cut = min(boundary, end + 1)
+                        if stall_offset is not None and offset < stall_offset:
+                            cut = min(cut, stall_offset)
                         self.wfile.write(data[offset:cut])
                         self.wfile.flush()
                         with request_lock:
@@ -146,7 +157,7 @@ def _serve_clip(
                             )
                             if interrupt_this_read:
                                 disconnected.set()
-                        if stall_this_read:
+                        if cut == stall_offset or stall_this_read:
                             assert stalled is not None and release_read is not None
                             stalled.set()
                             waiting_for_release = not release_read.is_set()
