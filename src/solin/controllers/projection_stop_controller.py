@@ -5,6 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .projection_playback_operations import ProjectionPlaybackOperations
+
 log = logging.getLogger(__name__)
 
 
@@ -14,6 +16,7 @@ class ProjectionStopContext:
 
     projection_session: Any
     projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     media_controller: Any
     ndi_service: Any
     projection_windows: Callable[[], list[Any]]
@@ -87,6 +90,7 @@ class ProjectionStopController:
             self._handlers.stop_browser_tab_projection()
 
         context.media_controller.stop()
+        context.projection_playback.reset_projection()
         if was_obs_stream and stop_ndi_later_for_obs:
             context.ndi_service.stop_later()
         else:

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP
 from PySide6.QtGui import QImage
@@ -15,8 +15,14 @@ from PySide6.QtWidgets import QMessageBox
 from ..core.foundation.constants import (
     ALLOW_ZOOM_PAN_ON_LIVE_TAB,
 )
-from ..core.media.formats import AUDIO_EXTS
-from ..core.media.playback_request import MediaPlaybackRequest, MediaTrim
+from ..core.media.duration import normalize_duration_ticks
+from ..core.media.formats import MediaKind, media_kind_from_path
+from ..core.media.playback_request import (
+    TICKS_PER_MILLISECOND,
+    MediaPlaybackRequest,
+    MediaTrim,
+)
+from ..core.meetings.models import MeetingMedia
 from ..core.projection.aspect_ratio import (
     DEFAULT_PROJECTION_ASPECT_RATIO,
     ProjectionAspectRatio,
@@ -30,6 +36,11 @@ from ..core.projection.image_framing import (
     image_transforms_equal,
 )
 from ..core.projection.result import ProjectionResult, ProjectionResultStatus
+from .projection_playback_operations import (
+    PlaybackEndAction,
+    ProjectionPlaybackOperations,
+    ProjectionQueue,
+)
 
 #: Projection states that carry a zoom/pan transform so newly created surfaces
 #: can restore exactly the same framing.
@@ -39,14 +50,8 @@ _TRANSFORMABLE_STATES = frozenset({"image"})
 _IDENTITY_TRANSFORM = (1.0, 0.0, 0.0)
 
 _TR_CONTEXT = "MediaProjection"
-_SHOWING_IMAGE_SOURCE = QT_TRANSLATE_NOOP(
-    "MediaProjection",
-    "Showing image",
-)
-_LIVE_TAB_SOURCE = QT_TRANSLATE_NOOP(
-    "MediaProjection",
-    "Browser — Live Tab",
-)
+_SHOWING_IMAGE_SOURCE = cast(str, QT_TRANSLATE_NOOP("MediaProjection", "Showing image"))
+_LIVE_TAB_SOURCE = cast(str, QT_TRANSLATE_NOOP("MediaProjection", "Browser — Live Tab"))
 
 
 def _tr(source: str) -> str:
@@ -67,6 +72,7 @@ class MediaProjectionContext:
 
     projection_session: Any
     projection_bar: Any
+    projection_playback: ProjectionPlaybackOperations
     media_controller: Any
     ndi_service: Any
     projection_windows: Callable[[], list[Any]]
@@ -75,7 +81,6 @@ class MediaProjectionContext:
     dialog_parent: Any
     sjjm_announce_mode: Callable[[], bool]
     start_videos_paused: Callable[[], bool]
-    playback_protection: Any
     projection_aspect_ratio_provider: Callable[[], Any] = _default_projection_aspect_ratio
     content_frame_sink: Callable[[object], None] = _discard_content_frame
     image_source_lease: Callable[[str], AbstractContextManager] = nullcontext
@@ -88,7 +93,8 @@ class MediaProjectionHandlers:
     stop_browser_tab_projection: Callable[[], None]
     update_projection_status: Callable[..., None]
     prepare_video_session: Callable[[], None]
-    prepare_auto_share_playback: Callable[[], bool]
+    prepare_auto_share_playback: Callable[[bool], bool]
+    stop_projection: Callable[[], None]
 
 
 class MediaProjectionController:
@@ -102,7 +108,7 @@ class MediaProjectionController:
         self._context = context
         self._handlers = handlers
         self._session = context.projection_session
-        self._next_is_sjjm = False
+        self._playback = context.projection_playback
 
     def on_song_project(
         self,
@@ -126,101 +132,51 @@ class MediaProjectionController:
         playlist: list,
         order: str,
     ) -> None:
-        self._next_is_sjjm = True
         self.project_video(
             url,
             title,
             playlist or None,
             order if order else None,
             from_saved_playlist=True,
+            announce_song=True,
         )
 
-    def on_meeting_media_project(self, item) -> None:
+    def on_meeting_media_project(
+        self,
+        item: MeetingMedia | Mapping[str, Any],
+        *,
+        notify: bool = True,
+        start_paused: bool = False,
+    ) -> ProjectionResult:
         if not item:
-            return
-        if not self._allow_manual_projection_change():
-            return
+            return ProjectionResult(ProjectionResultStatus.INVALID)
+        if not self._playback.allow_manual_projection_change(notify=notify):
+            return ProjectionResult(ProjectionResultStatus.BLOCKED)
 
-        if isinstance(item, dict):
-            url = item.get("url") or item.get("file_path") or ""
-            title = item.get("title") or item.get("label") or "Media"
-            media_type = item.get("type") or item.get("media_type") or "video"
-            if media_type == "image" and url:
-                origin_item = {
-                    "url": url,
-                    "title": title,
-                    "type": media_type,
-                    **self._meeting_origin_fields(item),
-                }
-                self._project_image_path(
-                    title,
-                    url,
-                    playlist=[origin_item],
-                    image_framing=item.get("image_framing"),
-                    user_initiated=False,
-                )
-            elif url:
-                playlist_item = {
-                    "url": url,
-                    "title": title,
-                    "type": media_type,
-                    "start_trim_ticks": item.get("start_trim_ticks"),
-                    "end_trim_ticks": item.get("end_trim_ticks"),
-                    "base_duration_ticks": item.get("base_duration_ticks"),
-                    **self._meeting_origin_fields(item),
-                }
-                self.project_video(url, title, [playlist_item], None)
-            return
-
-        mime = item.mime_type or ""
-        title = re.sub(r"<[^>]+>", "", item.label or item.caption or "Media").strip()
-
-        if "image" in mime and item.file_path:
-            origin_item = {
-                "url": item.file_path,
-                "title": title,
-                "type": "image",
+        announce_song = False
+        if isinstance(item, Mapping):
+            record = {
+                "url": item.get("url") or item.get("file_path"),
+                "title": item.get("title") or item.get("label") or "Media",
+                "type": item.get("type") or item.get("media_type") or "video",
+                "start_trim_ticks": item.get("start_trim_ticks"),
+                "end_trim_ticks": item.get("end_trim_ticks"),
+                "base_duration_ticks": item.get("base_duration_ticks"),
+                "image_framing": item.get("image_framing"),
                 **self._meeting_origin_fields(item),
             }
-            self._project_image_path(
-                title,
-                item.file_path,
-                playlist=[origin_item],
-                image_framing=getattr(item, "image_framing", None),
-                user_initiated=False,
+        else:
+            announce_song = bool(
+                item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track
             )
-            return
+            record = self._meeting_media_record(item, notify=notify)
+            if record is None:
+                return ProjectionResult(ProjectionResultStatus.FAILED)
 
-        if "video" not in mime and "image" in mime:
-            return
-
-        if item.file_path:
-            if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
-                self._next_is_sjjm = True
-            media_type = "audio" if "audio" in mime else "video"
-            playlist_item = {
-                "url": item.file_path,
-                "title": title,
-                "type": media_type,
-                "start_trim_ticks": getattr(item, "start_trim_ticks", None),
-                "end_trim_ticks": getattr(item, "end_trim_ticks", None),
-                "base_duration_ticks": getattr(item, "base_duration_ticks", None),
-                **self._meeting_origin_fields(item),
-            }
-            self.project_video(
-                item.file_path,
-                title,
-                [playlist_item],
-                None,
-                user_initiated=False,
-            )
-            return
-
-        if item.key_symbol and item.key_symbol.lower() in ("sjj", "sjjm") and item.track:
-            self._next_is_sjjm = True
-            self._resolve_and_project_meeting_item(item, title)
-        elif item.key_symbol or item.meps_doc_id:
-            self._resolve_and_project_meeting_item(item, title)
+        queue = self._playback.new_queue((record,))
+        return self._project_queue_item(
+            queue, keep_expanded=False, start_paused=start_paused, announce_song=announce_song
+        )
 
     def on_playlist_project(
         self,
@@ -235,10 +191,8 @@ class MediaProjectionController:
             self._project_image_path(
                 title,
                 url,
-                playlist=playlist,
-                playback_order=order if order else None,
-                from_saved_playlist=True,
-                keep_expanded=self._context.projection_bar.is_expanded(),
+                queue=self._playback.new_queue(playlist, order, from_saved_playlist=True),
+                keep_expanded=True,
                 image_framing=selected_item.get("image_framing"),
             )
             return
@@ -262,79 +216,73 @@ class MediaProjectionController:
         playback_order: str | None = None,
         from_saved_playlist: bool = False,
         user_initiated: bool = True,
+        *,
+        keep_expanded: bool = False,
+        announce_song: bool = False,
     ) -> bool:
-        if user_initiated and not self._allow_manual_projection_change():
-            self._next_is_sjjm = False
+        if not url.strip():
             return False
-        items = playlist if playlist else [{"url": url, "title": title}]
-        self._context.projection_bar.set_playlist(
-            items,
-            playback_order,
-            from_saved_playlist=from_saved_playlist,
+        if user_initiated and not self._playback.allow_manual_projection_change():
+            return False
+        media_type = (
+            MediaKind.AUDIO if media_kind_from_path(url) is MediaKind.AUDIO else MediaKind.VIDEO
         )
-        ext = os.path.splitext(url.split("?")[0])[1].lower()
-        selected_item = next(
-            (item for item in items if item.get("url") == url),
-            items[0],
+        items = playlist or [{"url": url, "title": title, "type": media_type.value}]
+        index = next((i for i, item in enumerate(items) if item.get("url") == url), 0)
+        queue = self._playback.new_queue(
+            items, playback_order, index=index, from_saved_playlist=from_saved_playlist
         )
-        return self.project_video_core(
-            url,
-            title,
-            is_audio=ext in AUDIO_EXTS,
-            media_item=selected_item,
-            user_initiated=False,
+        return self._project_video(
+            url, title, queue, keep_expanded=keep_expanded, announce_song=announce_song
         )
 
-    def project_next_auto(self, item: dict[str, Any]) -> None:
-        context = self._context
-        url = str(item.get("url") or "")
-        title = str(item.get("title") or "")
-        media_type = str(item.get("type") or "video")
-        if url == "__replay__":
-            context.media_controller.replay()
+    def on_media_ended(self) -> None:
+        if self._session.state_type != "video":
             return
-
-        if media_type == "image":
-            self._project_image_path(
-                title,
-                url,
-                keep_expanded=context.projection_bar.is_expanded(),
-                image_framing=item.get("image_framing"),
-                user_initiated=False,
-            )
+        action = self._playback.after_media_ended()
+        if action is PlaybackEndAction.HOLD:
             return
+        if action is PlaybackEndAction.REPLAY:
+            self._context.media_controller.replay()
+        elif action is PlaybackEndAction.STOP:
+            self._handlers.stop_projection()
+        elif not self._project_queue_item(action, keep_expanded=True).accepted:
+            if self._session.state_type == "video":
+                self._handlers.stop_projection()
 
-        ext = os.path.splitext(url)[1].lower()
-        self.project_video_core(
-            url,
-            title,
-            keep_expanded=context.projection_bar.is_expanded(),
-            is_audio=ext in AUDIO_EXTS,
-            media_item=item,
-            user_initiated=False,
-        )
-
-    def project_video_core(
+    def _project_video(
         self,
         url: str,
         title: str,
-        keep_expanded: bool = False,
-        is_audio: bool = False,
-        media_item: dict[str, Any] | None = None,
-        user_initiated: bool = True,
+        queue: ProjectionQueue,
+        *,
+        keep_expanded: bool,
+        announce_song: bool = False,
+        start_paused: bool = False,
     ) -> bool:
-        if user_initiated and not self._allow_manual_projection_change():
-            self._next_is_sjjm = False
-            return False
         context = self._context
-        is_sjjm = self._next_is_sjjm
-        self._next_is_sjjm = False
+        media_item = queue.current_item
+        is_audio = (
+            (media_item is not None and media_item.get("type") == "audio")
+            or media_kind_from_path(url) is MediaKind.AUDIO
+        )
+        profile_paused = not is_audio and context.start_videos_paused()
+        pause_without_announcement = start_paused or profile_paused
+        duration_ticks = normalize_duration_ticks(ticks=(media_item or {}).get("base_duration_ticks"))
+        announce = (
+            announce_song
+            and not is_audio
+            and context.sjjm_announce_mode()
+            and not self._item_has_custom_trim(media_item)
+            and self._playback.allows_announcement(duration_ticks // TICKS_PER_MILLISECOND)
+        )
 
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.ndi_service.stop()
         with context.media_controller.replace_playback():
-            context.ndi_service.stop()
+            self._playback.reset_transport()
+            self._playback.commit_queue(queue)
             for projection_window in context.projection_windows():
                 projection_window.clear()
 
@@ -348,18 +296,16 @@ class MediaProjectionController:
                 for projection_window in context.projection_windows():
                     projection_window.begin_video()
 
-            announce = (
-                is_sjjm
-                and not is_audio
-                and context.sjjm_announce_mode()
-                and not self._item_has_custom_trim(media_item)
-            )
             if not is_audio:
                 self._handlers.prepare_video_session()
 
-            wait_for_auto_share = not is_audio and self._handlers.prepare_auto_share_playback()
+            wait_for_auto_share = not is_audio and self._handlers.prepare_auto_share_playback(
+                not pause_without_announcement
+            )
             if announce:
-                context.projection_bar.begin_announcement_mode()
+                self._playback.begin_announcement(
+                    start_paused=start_paused, pause_if_short=profile_paused
+                )
 
             self._session.set_state(
                 {
@@ -369,14 +315,17 @@ class MediaProjectionController:
                     "origin": self._projection_origin(media_item),
                 }
             )
-            start_paused = not is_audio and not announce and context.start_videos_paused()
+            open_paused = start_paused or (profile_paused and not announce) or wait_for_auto_share
+            session_id = self._session.session_id
             context.media_controller.start_playback(
                 self._playback_request(
                     media_item or {"url": url},
                     source=url,
-                    autoplay=not (start_paused or wait_for_auto_share),
+                    autoplay=not open_paused,
                 )
             )
+        if self._session.session_id != session_id:
+            return False
         self._handlers.update_projection_status(
             True,
             title,
@@ -387,7 +336,7 @@ class MediaProjectionController:
 
     def project_image_bytes(self, data: bytes) -> None:
         title = _tr(_SHOWING_IMAGE_SOURCE)
-        self._project_image_data(title, data, playlist=[])
+        self._project_image_data(title, data)
 
     def project_generated_image(
         self,
@@ -398,18 +347,17 @@ class MediaProjectionController:
         """Project an app-generated PNG without persisting it as operator media."""
 
         image = QImage()
-        if not data.startswith(b"\x89PNG\r\n\x1a\n") or not image.loadFromData(data, "PNG"):
+        if not data.startswith(b"\x89PNG\r\n\x1a\n") or not image.loadFromData(data):
             return ProjectionResult(ProjectionResultStatus.INVALID)
         if image.width() <= 0 or image.height() <= 0:
             return ProjectionResult(ProjectionResultStatus.INVALID)
-        if not self._allow_manual_projection_change():
+        if not self._playback.allow_manual_projection_change():
             return ProjectionResult(ProjectionResultStatus.BLOCKED)
 
         details = metadata or {}
         accepted = self._project_image_data(
             title,
             data,
-            playlist=[],
             user_initiated=False,
             generated_kind=str(details.get("generated_kind") or "generated"),
             fingerprint=str(details.get("fingerprint") or ""),
@@ -424,12 +372,12 @@ class MediaProjectionController:
     def project_tab_frame(self, frame) -> None:
         context = self._context
         if not self._session.tab_projection_active:
-            if not self._allow_manual_projection_change(notify=False):
+            if not self._playback.allow_manual_projection_change(notify=False):
                 return
             self._session.set_tab_projection_active(True)
             context.media_controller.stop()
             context.ndi_service.stop()
-            context.projection_bar.set_playlist([])
+            self._playback.reset_projection()
             for projection_window in context.projection_windows():
                 projection_window.clear()
             live_tab_title = _tr(_LIVE_TAB_SOURCE)
@@ -516,7 +464,7 @@ class MediaProjectionController:
         url_for_playlist = original_url if original_url else path
         playlist = [{"url": url_for_playlist, "title": title, "type": media_type}]
         if media_type == "image":
-            self._project_image_path(title, path, playlist=playlist)
+            self._project_image_path(title, path, queue=self._playback.new_queue(playlist))
         else:
             self.project_video(
                 path,
@@ -527,11 +475,9 @@ class MediaProjectionController:
             )
 
     def on_title_from_metadata(self, title: str) -> None:
-        projection_bar = self._context.projection_bar
-        if projection_bar.is_video_mode() and title:
-            projection_bar.set_projected_title(title)
-            if self._session.state_type == "video":
-                self._session.update_state(title=title)
+        if self._session.state_type == "video" and title:
+            self._session.update_state(title=title)
+            self._context.projection_bar.set_projected_title(title)
 
     def project_media_at_index(
         self,
@@ -539,73 +485,66 @@ class MediaProjectionController:
         index: int = 0,
         keep_expanded: bool = False,
         playback_order: str | None = None,
-    ) -> None:
-        context = self._context
-        if not playlist or index >= len(playlist):
-            return
-        if not self._allow_manual_projection_change():
-            return
+        *,
+        notify: bool = True,
+        start_paused: bool = False,
+    ) -> ProjectionResult:
+        if not 0 <= index < len(playlist):
+            return ProjectionResult(ProjectionResultStatus.INVALID)
+        if not self._playback.allow_manual_projection_change(notify=notify):
+            return ProjectionResult(ProjectionResultStatus.BLOCKED)
+        queue = self._playback.new_queue(playlist, playback_order, index=index)
+        return self._project_queue_item(queue, keep_expanded=keep_expanded, start_paused=start_paused)
 
-        item = playlist[index]
-        media_type = item.get("type", "video")
+    def on_playlist_navigate(self, index: int, *, notify: bool = True) -> ProjectionResult:
+        queue = self._playback.queue
+        if not 0 <= index < len(queue.items):
+            return ProjectionResult(ProjectionResultStatus.INVALID)
+        if index == queue.index:
+            return ProjectionResult(ProjectionResultStatus.ACCEPTED)
+        if not self._playback.allow_manual_projection_change(notify=notify):
+            return ProjectionResult(ProjectionResultStatus.BLOCKED)
+        return self._project_queue_item(queue.select(index), keep_expanded=True)
 
+    def _project_queue_item(
+        self,
+        queue: ProjectionQueue,
+        *,
+        keep_expanded: bool,
+        start_paused: bool = False,
+        announce_song: bool = False,
+    ) -> ProjectionResult:
+        item = queue.current_item
+        if not item or not (url := str(item.get("url") or "")).strip():
+            return ProjectionResult(ProjectionResultStatus.INVALID)
+
+        title = str(item.get("title") or "")
+        media_type = item.get("type")
         if media_type == "image":
-            self._project_image_path(
-                item["title"],
-                item["url"],
-                playlist=playlist,
-                playback_order=playback_order,
-                index=index,
+            accepted = self._project_image_path(
+                title,
+                url,
+                queue=queue,
                 keep_expanded=keep_expanded,
                 image_framing=item.get("image_framing"),
+                reframe_active_image=False,
                 user_initiated=False,
             )
-            return
-
-        ext = os.path.splitext(item["url"])[1].lower()
-        context.projection_bar.set_playlist(playlist, playback_order)
-        context.projection_bar.set_playlist_index(index)
-        self.project_video_core(
-            item["url"],
-            item["title"],
-            keep_expanded=keep_expanded,
-            is_audio=ext in AUDIO_EXTS,
-            media_item=item,
-            user_initiated=False,
-        )
-
-    def on_playlist_navigate(self, index: int) -> None:
-        projection_bar = self._context.projection_bar
-        playlist = projection_bar.playlist_items()
-        if not playlist or index >= len(playlist):
-            return
-        if not self._allow_manual_projection_change():
-            return
-
-        item = playlist[index]
-        media_type = item.get("type", "video")
-        if media_type == "image":
-            self._project_image_path(
-                item["title"],
-                item["url"],
-                keep_expanded=projection_bar.is_expanded(),
-                image_framing=item.get("image_framing"),
-                user_initiated=False,
+        else:
+            accepted = self._project_video(
+                url,
+                title,
+                queue,
+                keep_expanded=keep_expanded,
+                start_paused=start_paused,
+                announce_song=announce_song,
             )
-            return
-
-        ext = os.path.splitext(item["url"])[1].lower()
-        self.project_video_core(
-            item["url"],
-            item["title"],
-            keep_expanded=projection_bar.is_expanded(),
-            is_audio=ext in AUDIO_EXTS,
-            media_item=item,
-            user_initiated=False,
+        return ProjectionResult(
+            ProjectionResultStatus.ACCEPTED if accepted else ProjectionResultStatus.FAILED
         )
 
     @staticmethod
-    def _item_has_custom_trim(item: dict[str, Any] | None) -> bool:
+    def _item_has_custom_trim(item: Mapping[str, Any] | None) -> bool:
         if not item:
             return False
         for field in ("start_trim_ticks", "end_trim_ticks"):
@@ -618,7 +557,7 @@ class MediaProjectionController:
 
     @staticmethod
     def _playback_request(
-        item: dict[str, Any],
+        item: Mapping[str, Any],
         *,
         source: str | None = None,
         autoplay: bool = True,
@@ -650,34 +589,40 @@ class MediaProjectionController:
             occurrence_container_id=str(item.get("origin_container_id") or ""),
         )
 
-    def _resolve_and_project_meeting_item(self, item, title: str) -> None:
-        service = self._context.meeting_service()
-        resolved = service.resolve_media(item)
-        url = resolved.get("url", "")
-        if url:
-            display_title = resolved.get("title") or title
-            playlist_item = {
-                "url": url,
-                "title": display_title,
-                "type": "video",
-                "start_trim_ticks": getattr(item, "start_trim_ticks", None),
-                "end_trim_ticks": getattr(item, "end_trim_ticks", None),
-                "base_duration_ticks": getattr(item, "base_duration_ticks", None),
-                **self._meeting_origin_fields(item),
-            }
-            self.project_video(url, display_title, [playlist_item], None)
-            return
-
-        QMessageBox.information(
-            self._context.dialog_parent,
-            "Meetings",
-            f"Could not resolve video URL for: {title}\nCheck your internet connection.",
-        )
+    def _meeting_media_record(
+        self, item: MeetingMedia, *, notify: bool
+    ) -> dict[str, Any] | None:
+        mime = item.mime_type or ""
+        title = re.sub(r"<[^>]+>", "", item.label or item.caption or "Media").strip()
+        url = item.file_path
+        if not url and "image" not in mime and (item.key_symbol or item.meps_doc_id):
+            resolved = self._context.meeting_service().resolve_media(item)
+            url = resolved.get("url", "")
+            if not url and notify:
+                QMessageBox.information(
+                    self._context.dialog_parent,
+                    "Meetings",
+                    f"Could not resolve video URL for: {title}\nCheck your internet connection.",
+                )
+            title = resolved.get("title") or title
+        if not url:
+            return None
+        media_type = "image" if "image" in mime else "audio" if "audio" in mime else "video"
+        return {
+            "url": url,
+            "title": title,
+            "type": media_type,
+            "start_trim_ticks": getattr(item, "start_trim_ticks", None),
+            "end_trim_ticks": getattr(item, "end_trim_ticks", None),
+            "base_duration_ticks": getattr(item, "base_duration_ticks", None),
+            "image_framing": getattr(item, "image_framing", None),
+            **self._meeting_origin_fields(item),
+        }
 
     @staticmethod
     def _meeting_origin_fields(item: object) -> dict[str, str]:
         def value(name: str) -> object:
-            if isinstance(item, dict):
+            if isinstance(item, Mapping):
                 return item.get(name)
             return getattr(item, name, "")
 
@@ -692,46 +637,40 @@ class MediaProjectionController:
         title: str,
         path: str,
         *,
-        playlist: list | None = None,
-        playback_order: str | None = None,
-        from_saved_playlist: bool = False,
-        index: int | None = None,
+        queue: ProjectionQueue | None = None,
         keep_expanded: bool = False,
         image_framing: object = None,
+        reframe_active_image: bool = True,
         user_initiated: bool = True,
-    ) -> None:
-        if user_initiated and not self._allow_manual_projection_change():
-            return
-        try:
-            with self._context.image_source_lease(path):
+    ) -> bool:
+        if user_initiated and not self._playback.allow_manual_projection_change():
+            return False
+        with self._context.image_source_lease(path):
+            try:
                 with open(path, "rb") as handle:
                     data = handle.read()
-                self._project_image_data(
-                    title,
-                    data,
-                    playlist=playlist,
-                    playback_order=playback_order,
-                    from_saved_playlist=from_saved_playlist,
-                    index=index,
-                    keep_expanded=keep_expanded,
-                    image_framing=image_framing,
-                    user_initiated=False,
-                    source_path=path,
-                )
-        except OSError:
-            return
+            except OSError:
+                return False
+            return self._project_image_data(
+                title,
+                data,
+                queue=queue,
+                keep_expanded=keep_expanded,
+                image_framing=image_framing,
+                reframe_active_image=reframe_active_image,
+                user_initiated=False,
+                source_path=path,
+            )
 
     def _project_image_data(
         self,
         title: str,
         data: bytes,
         *,
-        playlist: list | None = None,
-        playback_order: str | None = None,
-        from_saved_playlist: bool = False,
-        index: int | None = None,
+        queue: ProjectionQueue | None = None,
         keep_expanded: bool = False,
         image_framing: object = None,
+        reframe_active_image: bool = True,
         user_initiated: bool = True,
         generated_kind: str = "",
         fingerprint: str = "",
@@ -740,35 +679,34 @@ class MediaProjectionController:
         auto_keys_media: bool = True,
         source_path: str = "",
     ) -> bool:
-        if user_initiated and not self._allow_manual_projection_change():
+        if user_initiated and not self._playback.allow_manual_projection_change():
             return False
         image = QImage()
         if not data or not image.loadFromData(data) or image.width() <= 0 or image.height() <= 0:
             return False
         context = self._context
         initial_transform = self._prepared_image_transform(data, image_framing)
-        if self._update_active_image_framing(data, initial_transform):
-            self._session.update_state(source_path=source_path)
+        if queue is None:
+            queue = self._playback.new_queue(())
+        origin = self._projection_origin(queue.current_item)
+        if (
+            reframe_active_image
+            and not generated_kind
+            and not self._session.state.get("generated_kind")
+            and self._session.state.get("origin") == origin
+            and self._update_active_image_framing(data, initial_transform)
+        ):
+            self._playback.commit_queue(queue)
+            self._session.update_state(source_path=source_path, title=title, origin=origin)
+            context.projection_bar.set_projected_title(title)
             return True
 
         self._session.set_tab_projection_active(False)
         self._handlers.stop_browser_tab_projection()
         context.media_controller.stop()
         context.ndi_service.stop()
-        if playlist is not None:
-            if playback_order is None:
-                context.projection_bar.set_playlist(
-                    playlist,
-                    from_saved_playlist=from_saved_playlist,
-                )
-            else:
-                context.projection_bar.set_playlist(
-                    playlist,
-                    playback_order,
-                    from_saved_playlist=from_saved_playlist,
-                )
-            if index is not None:
-                context.projection_bar.set_playlist_index(index)
+        self._playback.reset_transport()
+        self._playback.commit_queue(queue)
 
         for projection_window in context.projection_windows():
             projection_window.clear()
@@ -780,9 +718,7 @@ class MediaProjectionController:
         state = {
             "type": "image",
             "title": title,
-            "origin": self._projection_origin(
-                playlist[index or 0] if playlist and 0 <= (index or 0) < len(playlist) else None
-            ),
+            "origin": origin,
             "data": data,
             "transform": (
                 initial_transform.zoom,
@@ -817,11 +753,8 @@ class MediaProjectionController:
         )
         return True
 
-    def _allow_manual_projection_change(self, *, notify: bool = True) -> bool:
-        return self._context.playback_protection.allow_manual_projection_change(notify=notify)
-
     @staticmethod
-    def _projection_origin(item: dict[str, Any] | None) -> dict[str, str] | None:
+    def _projection_origin(item: Mapping[str, Any] | None) -> dict[str, str] | None:
         if not item:
             return None
         kind = str(item.get("origin_kind") or "")

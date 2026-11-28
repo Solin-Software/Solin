@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from types import SimpleNamespace
 
 from PySide6.QtGui import QImage
@@ -116,6 +118,7 @@ class _WindowStub:
         self._obs_service = _ObsServiceStub()
         self._quick_toolbar = _QuickToolbarStub()
         self.proj_bar = _ProjectionBarStub()
+        self.projection_playback = Mock()
         self.projection_session = ProjectionSession()
         self.obs_scene_session = ObsSceneSession()
         self._ndi_service = SimpleNamespace(is_running=False)
@@ -152,6 +155,7 @@ def _controller(window):
             zoom_service=window._zoom_service,
             notifications=window.notifications,
             projection_bar=window.proj_bar,
+            projection_playback=window.projection_playback,
             media_controller=window.media_ctrl,
             quick_toolbar=lambda: window._quick_toolbar,
             projection_windows=lambda: [],
@@ -190,6 +194,7 @@ def test_live_stream_replacements_are_rejected_before_side_effects_when_locked()
     controller.project_obs_ndi_stream()
 
     assert window.browser_projection_stops == 0
+    window.projection_playback.reset_projection.assert_not_called()
     assert window.projection_session.state == {"type": "idle"}
     assert window.stopped_projection is False
 
@@ -218,7 +223,6 @@ def test_obs_ndi_stream_replaces_content_and_publishes_frames():
     window._ndi_service = SimpleNamespace(
         start=lambda source, *, max_fps: streams.append((source, max_fps)),
     )
-    window.proj_bar.set_playlist = lambda _items: None
     window.proj_bar.is_expanded = lambda: False
     window.proj_bar.activate_live_stream = lambda _title, *, keep_expanded: None
     window.proj_bar.update_tab_live_preview = previews.append
@@ -230,6 +234,7 @@ def test_obs_ndi_stream_replaces_content_and_publishes_frames():
     controller.on_obs_ndi_frame(image)
 
     assert stopped == [True]
+    window.projection_playback.reset_projection.assert_called_once_with()
     assert streams == [("Program", 30)]
     assert window.projection_session.state_type == "obs_stream"
     assert window._quick_toolbar.obs_stream_active is True

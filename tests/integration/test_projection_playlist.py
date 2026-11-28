@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtTest import QSignalSpy
 
 from solin.controllers.playback_protection_controller import PlaybackProtectionController
+from solin.controllers.projection_playback_operations import ProjectionPlaybackOperations
 from solin.core.foundation.runtime_paths import ProfilePaths
 from solin.core.foundation.settings_store import SettingsStore
 from solin.core.media.playback_state import SolinPlaybackState
@@ -18,6 +19,7 @@ from solin.core.projection.image_framing import IDENTITY_IMAGE_TRANSFORM, ImageT
 from solin.core.rendering.fonts import FontManager
 from solin.ui.incremental_load import IncrementalLoadState
 import solin.widgets.projection.bar as projection_bar
+from solin.widgets.projection.audio import ProjectionAudioMixin
 from solin.widgets.projection.playlist import ProjectionPlaylistMixin
 
 
@@ -52,6 +54,7 @@ class _PlaybackSettings:
 
 
 class _Media(QObject):
+    volume_changed = Signal(float)
     state_changed = Signal(object)
     duration_changed = Signal(int)
     position_changed = Signal(int)
@@ -61,9 +64,15 @@ class _Media(QObject):
     playback_recovery_changed = Signal(bool)
 
     is_playing = False
+    volume = 0.5
+    playback_rate = 1.0
 
-    def set_volume(self, _volume):
-        pass
+    def set_playback_rate(self, rate):
+        self.playback_rate = rate
+
+    def set_volume(self, volume):
+        self.volume = volume
+        self.volume_changed.emit(volume)
 
     def set_playing(self, playing):
         self.is_playing = playing
@@ -77,6 +86,7 @@ def projection_controls(tmp_path, monkeypatch):
     settings = SettingsStore.for_namespace(f"projection-lifecycle-{uuid.uuid4().hex}", "test")
     media = _Media()
     protection = PlaybackProtectionController(MediaSettingsStore(settings), media)
+    playback = ProjectionPlaybackOperations(media, ProjectionPlaybackSettingsStore(settings), protection)
     errors = []
     monkeypatch.setattr(sys, "excepthook", lambda *error: errors.append(error))
     bar = None
@@ -84,7 +94,7 @@ def projection_controls(tmp_path, monkeypatch):
         bar = projection_bar.ProjectionBar(
             media,
             playback_settings=ProjectionPlaybackSettingsStore(settings),
-            playback_protection=protection,
+            playback=playback,
             profile_paths=Mock(spec=ProfilePaths),
             profile_media_store=Mock(spec=ProfileMediaStore),
             media_cache_dir=tmp_path,
@@ -92,7 +102,7 @@ def projection_controls(tmp_path, monkeypatch):
             font_manager=Mock(spec=FontManager),
             yearly_text_provider=lambda: ("", "", ""),
         )
-        yield SimpleNamespace(bar=bar, media=media, protection=protection, errors=errors)
+        yield SimpleNamespace(bar=bar, media=media, protection=protection, playback=playback, errors=errors)
     finally:
         if bar is not None:
             bar.overlay_preparation_handle.cancel()
@@ -123,8 +133,9 @@ def test_protection_changes_preserve_deferred_overlay(
             handle._run_next_unit()
     overlay = bar.overlay
     state = handle.state
-    bar._playlist = [{"title": str(index)} for index in range(item_count)]
-    bar._playlist_index = max(0, item_count - 2)
+    controls.playback.commit_queue(controls.playback.new_queue(
+        [{"title": str(index)} for index in range(item_count)], index=max(0, item_count - 2),
+    ))
 
     controls.protection.set_enabled(initial_enabled)
     controls.protection.set_enabled(not initial_enabled)
@@ -159,9 +170,10 @@ def test_overlay_completion_and_protection_changes_sync_current_navigation(
     bar = controls.bar
     controls.protection.set_enabled(True)
     controls.media.set_playing(locked)
-    bar._playlist = [{"title": str(index)} for index in range(item_count)]
-    bar._playlist_index = max(0, item_count - 2)
-    bar._is_from_saved_playlist = from_saved_playlist
+    controls.playback.commit_queue(controls.playback.new_queue(
+        [{"title": str(index)} for index in range(item_count)],
+        index=max(0, item_count - 2), from_saved_playlist=from_saved_playlist,
+    ))
 
     bar._ensure_overlay_ready()
 
@@ -184,7 +196,6 @@ def test_overlay_completion_and_protection_changes_sync_current_navigation(
 def test_projection_bar_uses_playlist_mixin():
     assert projection_bar.ProjectionPlaylistMixin is ProjectionPlaylistMixin
     assert issubclass(projection_bar.ProjectionBar, ProjectionPlaylistMixin)
-    assert projection_bar.ProjectionBar.set_playlist is ProjectionPlaylistMixin.set_playlist
     assert (
         projection_bar.ProjectionBar._toggle_playlist_panel
         is ProjectionPlaylistMixin._toggle_playlist_panel
@@ -255,25 +266,57 @@ def test_image_framing_options_only_update_preview_until_apply(
     assert projection_controls.errors == []
 
 
-def test_set_playlist_materializes_overlay_before_using_playlist_controls():
-    calls = []
-    host = type("ProjectionHost", (), {})()
-    host._ensure_overlay_ready = lambda: calls.append("ready")
-    host._playback_settings = _PlaybackSettings()
-    host._live_thumb_timer = _Timer()
-    host._thumb_queue = _ThumbnailQueue()
-    host.playlist_panel = _Panel()
-    host._update_nav_buttons = lambda: calls.append("navigation")
+def test_volume_render_does_not_emit_control_intent(projection_controls):
+    controls = projection_controls
+    bar = controls.bar
+    overlay = bar._ensure_fullscreen_overlay()
+    bar_changes = QSignalSpy(bar.vol_slider.valueChanged)
+    fullscreen_changes = QSignalSpy(overlay.volume_changed)
 
-    ProjectionPlaylistMixin.set_playlist(host, [{"url": "video.mp4"}])
+    controls.playback.set_volume(0.37)
 
-    assert calls == ["ready", "navigation"]
+    assert bar.vol_slider.value() == 37
+    assert overlay.vol_slider.value() == 37
+    assert bar_changes.count() == 0
+    assert fullscreen_changes.count() == 0
+    assert controls.errors == []
+
+
+def test_shared_gate_blocks_bar_and_fullscreen_transport(projection_controls):
+    controls = projection_controls
+    bar = controls.bar
+    overlay = bar._ensure_fullscreen_overlay()
+    controls.media.toggle_play_pause = Mock()
+    controls.media.set_audio_suppressed = Mock()
+    controls.playback.begin_announcement()
+
+    assert not bar.play_btn.isEnabled() and not overlay.play_btn.isEnabled()
+    assert not bar.seek_slider.isEnabled() and not overlay.seek_slider.isEnabled()
+    bar.play_btn.click()
+    overlay.toggle_requested.emit()
+    overlay.seek_requested.emit(1000)
+    controls.media.toggle_play_pause.assert_not_called()
+    assert controls.playback.transport_blocked and controls.playback.seek_blocked
+    assert controls.errors == []
+
+
+def test_playlist_controls_emit_intent_without_mutating_queue(projection_controls):
+    controls = projection_controls
+    bar = controls.bar
+    controls.playback.commit_queue(controls.playback.new_queue([{}, {}, {}], index=1))
+    bar._ensure_overlay_ready()
+    intents = QSignalSpy(bar.playlist_navigate)
+    bar.prev_btn.click()
+    bar.next_btn.click()
+    bar._on_panel_item_clicked(2)
+    assert [intents.at(i)[0] for i in range(intents.count())] == [0, 2, 2]
+    assert controls.playback.queue.index == 1
 
 
 def test_source_duration_is_published_without_reaching_into_playlist_widgets():
     signal = _Signal()
     host = type("ProjectionHost", (), {})()
-    host.current_playlist_item = lambda: {"id": "media-1"}
+    host._playback = SimpleNamespace(queue=SimpleNamespace(current_item={"id": "media-1"}))
     host.source_duration_discovered = signal
 
     projection_bar.ProjectionBar._on_source_duration_changed(host, 12_345)
@@ -284,7 +327,7 @@ def test_source_duration_is_published_without_reaching_into_playlist_widgets():
 def test_source_duration_ignores_missing_items_and_invalid_values():
     signal = _Signal()
     host = type("ProjectionHost", (), {})()
-    host.current_playlist_item = lambda: None
+    host._playback = SimpleNamespace(queue=SimpleNamespace(current_item=None))
     host.source_duration_discovered = signal
 
     projection_bar.ProjectionBar._on_source_duration_changed(host, 12_345)
@@ -300,15 +343,14 @@ def test_preview_idle_path_accepts_only_existing_local_visual_media(tmp_path):
     host._is_audio = False
     host._is_live_tab = False
     host._mode = "video"
-    host._playlist_index = 0
-    host._playlist = [{"url": str(video)}]
+    host._playback = SimpleNamespace(queue=SimpleNamespace(index=0, items=[{"url": str(video)}]))
 
     assert ProjectionPlaylistMixin._resolve_idle_path(host) == str(video)
 
-    host._playlist = [{"url": "https://example.test/idle.mp4"}]
+    host._playback.queue.items = [{"url": "https://example.test/idle.mp4"}]
     assert ProjectionPlaylistMixin._resolve_idle_path(host) == ""
 
-    host._playlist = [{"url": str(video)}]
+    host._playback.queue.items = [{"url": str(video)}]
     host._is_audio = True
     assert ProjectionPlaylistMixin._resolve_idle_path(host) == ""
 
@@ -334,8 +376,7 @@ class _CaptureHost(ProjectionPlaylistMixin):
     def __init__(self):
         self._live_thumb_captured = False
         self._mode = "video"
-        self._playlist_index = 0
-        self._playlist = [{"url": "clip.mp4", "type": "video"}]
+        self._playback = SimpleNamespace(queue=SimpleNamespace(index=0, items=[{"url": "clip.mp4", "type": "video"}]))
         self._thumbnail_sources = {}
         self._thumb_queue = _CaptureQueue()
         self._is_audio = False
@@ -355,16 +396,16 @@ def test_live_thumbnail_fallback_uses_queue_once_for_current_source():
 
 def test_live_thumbnail_does_not_repeat_previous_queue_extraction():
     host = _CaptureHost()
-    host._request_thumbnail(0, host._playlist[0])
+    host._request_thumbnail(0, host._playback.queue.items[0])
     # The first attempt may have failed. Its retry remains the queue's decision.
     host._do_live_thumb_capture()
-    host._request_thumbnail(0, host._playlist[0])
+    host._request_thumbnail(0, host._playback.queue.items[0])
     assert host._thumb_queue.requests == [(0, "clip.mp4", "video")]
 
 
 def test_live_thumbnail_keeps_http_source_for_completed_cache_fallback():
     host = _CaptureHost()
-    host._playlist[0]["url"] = "https://example.test/clip.mp4"
+    host._playback.queue.items[0]["url"] = "https://example.test/clip.mp4"
     host.media.local_path = "cache/completed.mp4"
     host._do_live_thumb_capture()
     assert host._thumb_queue.requests == [(0, "https://example.test/clip.mp4", "video")]
@@ -395,7 +436,7 @@ def test_live_thumbnail_does_not_extract_remote_playback_path(path):
 @pytest.mark.parametrize("index", [-1, 1])
 def test_live_thumbnail_ignores_invalid_playlist_index(index):
     host = _CaptureHost()
-    host._playlist_index = index
+    host._playback.queue.index = index
     host._do_live_thumb_capture()
     assert host._thumb_queue.requests == []
 
@@ -403,9 +444,10 @@ def test_live_thumbnail_ignores_invalid_playlist_index(index):
 def test_audio_cover_feeds_queue_even_after_previous_attempt():
     host = _CaptureHost()
     host._is_audio = True
-    host._request_thumbnail(0, host._playlist[0])
+    host._expanded = False
+    host._request_thumbnail(0, host._playback.queue.items[0])
     cover = QPixmap(1, 1)
-    host._audio_cover_pixmap = cover
-    host._request_thumbnail(0, host._playlist[0])
-    assert len(host._thumb_queue.requests) == 1
+
+    ProjectionAudioMixin.set_cover_art(host, cover)
+
     assert host._thumb_queue.covers == [(0, cover)]

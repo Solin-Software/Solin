@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from PySide6.QtCore import QDateTime
 
 from solin.controllers.timer_projection_controller import (
@@ -27,11 +29,7 @@ class _ServiceStub:
 
 class _ProjectionBarStub:
     def __init__(self):
-        self.playlists = []
         self.timers = []
-
-    def set_playlist(self, playlist):
-        self.playlists.append(playlist)
 
     def activate_timer(self, target_dt, presentation):
         self.timers.append((target_dt, presentation))
@@ -80,6 +78,7 @@ class _WindowStub:
         self.media_ctrl = _ServiceStub()
         self._ndi_service = _ServiceStub()
         self.proj_bar = _ProjectionBarStub()
+        self.projection_playback = Mock()
         self._projection_integrations = _ProjectionIntegrationsStub()
         self.projection_session.set_state({"type": "video"})
         self.windows = [_ProjectionWindowStub(), _ProjectionWindowStub()]
@@ -103,6 +102,7 @@ def _controller(window):
         TimerProjectionContext(
             projection_session=window.projection_session,
             projection_bar=window.proj_bar,
+            projection_playback=window.projection_playback,
             media_controller=window.media_ctrl,
             ndi_service=window._ndi_service,
             projection_windows=window._all_windows,
@@ -132,7 +132,7 @@ def test_start_timer_stops_active_sources_and_broadcasts_timer():
     assert window._navigation.stopped == 1
     assert window.media_ctrl.stopped == 1
     assert window._ndi_service.stopped == 1
-    assert window.proj_bar.playlists == [[]]
+    window.projection_playback.reset_projection.assert_called_once_with()
     assert window.proj_bar.timers == [
         (target_dt, MediaCountdownPresentation.YEARLY_TEXT)
     ]
@@ -167,6 +167,7 @@ def test_timer_projection_is_rejected_without_side_effects_when_locked():
     assert window._navigation.stopped == 0
     assert window.media_ctrl.stopped == 0
     assert window.proj_bar.timers == []
+    window.projection_playback.reset_projection.assert_not_called()
 
 
 def test_automatic_timer_revalidates_policy_and_records_occurrence_origin():
@@ -213,6 +214,7 @@ def test_automatic_timer_never_replaces_an_active_operator_projection():
     assert window.projection_session.tab_projection_active is True
     assert window.media_ctrl.stopped == 0
     assert window.proj_bar.timers == []
+    window.projection_playback.reset_projection.assert_not_called()
 
 
 def test_automatic_timer_has_no_side_effects_when_policy_changes_before_start():
@@ -234,6 +236,7 @@ def test_automatic_timer_has_no_side_effects_when_policy_changes_before_start():
     assert window.projection_session.state == {"type": "idle"}
     assert window.media_ctrl.stopped == 0
     assert window.proj_bar.timers == []
+    window.projection_playback.reset_projection.assert_not_called()
 
 
 def test_automatic_timer_rejects_a_target_that_has_already_been_reached():
@@ -251,6 +254,7 @@ def test_automatic_timer_rejects_a_target_that_has_already_been_reached():
     assert window.playback_protection.automatic_projection_states == []
     assert window.projection_session.state == {"type": "video"}
     assert window.proj_bar.timers == []
+    window.projection_playback.reset_projection.assert_not_called()
 
 
 def test_timer_update_and_blink_are_broadcast_to_all_projection_windows():

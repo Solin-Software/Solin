@@ -1,225 +1,139 @@
-import solin.widgets.projection.bar as projection_bar
+from unittest.mock import Mock
+
+import pytest
+from PySide6.QtCore import QObject, Signal
+
+from solin.controllers.projection_playback_operations import ProjectionPlaybackOperations
 
 
-class _Timer:
+class Media(QObject):
+    volume_changed = Signal(float)
+    duration_changed = Signal(int)
+    position_changed = Signal(int)
+    is_ended = False
+
     def __init__(self):
-        self.started = 0
-        self.stopped = 0
+        super().__init__()
+        self.volume = 0.8
+        self.playback_rate = 1.0
+        self.suppressed = False
+        self.pause = Mock()
+        self.play = Mock()
+        self.seek = Mock()
+        self.toggle_play_pause = Mock()
 
-    def start(self):
-        self.started += 1
+    def set_volume(self, value):
+        self.volume = value
+        self.volume_changed.emit(value)
 
-    def stop(self):
-        self.stopped += 1
+    def set_playback_rate(self, value):
+        self.playback_rate = value
 
-
-class _Control:
-    def __init__(self):
-        self.enabled = True
-        self.history = []
-
-    def setEnabled(self, enabled):
-        self.enabled = enabled
-        self.history.append(enabled)
-
-    def isEnabled(self):
-        return self.enabled
-
-    def setToolTip(self, _text):
-        return None
-
-    def setVisible(self, _visible):
-        return None
+    def set_audio_suppressed(self, value):
+        self.suppressed = value
 
 
-class _Protection:
+class Protection(QObject):
+    lockedChanged = Signal()
     locked = False
 
-    def allow_manual_projection_change(self, *, notify=True):
-        return not self.locked
+    def request_seek(self, position):
+        self.seek(position)
+        return True
 
-
-class _Signal:
     def __init__(self):
-        self.emitted = 0
-
-    def emit(self):
-        self.emitted += 1
+        super().__init__()
+        self.seek = Mock()
 
 
-class _Media:
-    def __init__(self):
-        self.position = 0
-        self.audio_suppressed = False
-        self.paused = 0
-        self.seeks = []
-        self.played = 0
-
-    def set_audio_suppressed(self, suppressed):
-        self.audio_suppressed = suppressed
-
-    def pause(self):
-        self.paused += 1
-
-    def seek(self, position):
-        self.seeks.append(position)
-
-    def play(self):
-        self.played += 1
+@pytest.fixture
+def playback():
+    media = Media()
+    protection = Protection()
+    settings = Mock()
+    settings.playback_order.return_value = "off"
+    settings.loop_enabled.return_value = False
+    settings.volume.return_value = 0.8
+    settings.speed.return_value = 1.0
+    return ProjectionPlaybackOperations(media, settings, protection), media, protection
 
 
-def _make_bar():
-    bar = projection_bar.ProjectionBar.__new__(projection_bar.ProjectionBar)
-    bar._announce_state = "off"
-    bar._auto_share_playback_waiting = False
-    bar._announce_gate_ms = 3500
-    bar._announce_timer = _Timer()
-    bar.media = _Media()
-    bar.play_btn = _Control()
-    bar.seek_slider = _Control()
-    bar.toggle_requested = _Signal()
-    bar._playback_protection = _Protection()
-    bar._overlay_ready = True
-    bar._playlist = []
-    bar._playlist_index = 0
-    bar.prev_btn = _Control()
-    bar.next_btn = _Control()
-    bar.ov_panel_btn = _Control()
-    bar.ov_send_temp_btn = _Control()
-    bar._is_from_saved_playlist = False
-    return bar
+def test_announcement_lead_in_gates_transport_until_media_position(playback):
+    operations, media, protection = playback
+    operations.begin_announcement()
+    assert media.suppressed and operations.transport_blocked and operations.seek_blocked
+    operations.toggle()
+    assert not operations.pause() and not operations.resume() and not operations.seek(200)
+    media.position_changed.emit(3499)
+    media.pause.assert_not_called()
+    media.position_changed.emit(3500)
+    media.pause.assert_called_once()
+    assert not operations.transport_blocked and operations.seek_blocked and media.suppressed
+    operations.toggle()
+    media.seek.assert_called_once_with(0)
+    media.play.assert_called_once()
+    assert not media.suppressed and not operations.seek_blocked
+    assert operations.seek(200)
+    protection.seek.assert_called_once_with(200)
 
 
-def test_begin_announcement_mode_mutes_locks_controls_and_starts_gate_timer():
-    bar = _make_bar()
-
-    bar.begin_announcement_mode()
-
-    assert bar._announce_state == "gate"
-    assert bar.media.audio_suppressed
-    assert bar.play_btn.enabled is False
-    assert bar.seek_slider.enabled is False
-    assert bar._announce_timer.started == 1
-
-
-def test_announcement_gate_waits_for_media_time_before_pausing():
-    bar = _make_bar()
-    bar.begin_announcement_mode()
-    bar.media.position = bar._announce_gate_ms - 1
-
-    bar._on_announce_gate_expired()
-
-    assert bar._announce_state == "gate"
-    assert bar.media.paused == 0
-    assert bar._announce_timer.stopped == 0
-    assert bar.media.audio_suppressed
-    assert bar.play_btn.enabled is False
-    assert bar.seek_slider.enabled is False
+@pytest.mark.parametrize("success", [False, True])
+def test_share_wait_blocks_commands_and_resolves(playback, success):
+    operations, media, protection = playback
+    operations.begin_auto_share_wait()
+    operations.toggle()
+    assert not operations.pause() and not operations.resume() and not operations.seek(10)
+    media.toggle_play_pause.assert_not_called()
+    protection.seek.assert_not_called()
+    operations.resolve_auto_share_wait(success)
+    assert not operations.transport_blocked and not operations.seek_blocked
+    assert media.play.call_count == int(success)
+    operations.resolve_auto_share_wait(success)
+    assert media.play.call_count == int(success)
 
 
-def test_announcement_gate_pauses_and_keeps_audio_suppressed():
-    bar = _make_bar()
-    bar.begin_announcement_mode()
-    bar.media.position = bar._announce_gate_ms
-
-    bar._on_announce_gate_expired()
-
-    assert bar._announce_state == "ready"
-    assert bar._announce_timer.stopped == 1
-    assert bar.media.paused == 1
-    assert bar.media.audio_suppressed
-    assert bar.play_btn.enabled is True
-    assert bar.seek_slider.enabled is False
-
-
-def test_play_button_in_ready_state_restarts_song_and_unlocks_slider():
-    bar = _make_bar()
-    bar.begin_announcement_mode()
-    bar.media.position = bar._announce_gate_ms
-    bar._on_announce_gate_expired()
-
-    bar._on_play_btn_clicked()
-
-    assert bar._announce_state == "off"
-    assert bar.seek_slider.enabled is True
-    assert not bar.media.audio_suppressed
-    assert bar.media.seeks == [0]
-    assert bar.media.played == 1
-    assert bar.toggle_requested.emitted == 0
+@pytest.mark.parametrize("success", [False, True])
+def test_share_wait_defers_announcement_gate(playback, success):
+    operations, media, _ = playback
+    operations.begin_auto_share_wait()
+    operations.begin_announcement()
+    media.position_changed.emit(4000)
+    media.pause.assert_not_called()
+    operations.resolve_auto_share_wait(success)
+    media.play.assert_called_once()
+    assert operations.transport_blocked and operations.seek_blocked
+    media.position_changed.emit(4000)
+    media.pause.assert_called_once()
 
 
-def test_play_button_outside_announcement_mode_uses_regular_toggle_signal():
-    bar = _make_bar()
-
-    bar._on_play_btn_clicked()
-
-    assert bar.toggle_requested.emitted == 1
-    assert bar.media.seeks == []
-    assert bar.media.played == 0
-
-
-def test_auto_share_wait_locks_manual_playback_and_seek_controls():
-    bar = _make_bar()
-
-    bar.begin_auto_share_playback_wait()
-    bar._on_play_btn_clicked()
-
-    assert bar._auto_share_playback_waiting is True
-    assert bar.play_btn.enabled is False
-    assert bar.seek_slider.enabled is False
-    assert bar.toggle_requested.emitted == 0
+def test_reset_restores_audio_and_transport(playback):
+    operations, media, _ = playback
+    operations.begin_announcement()
+    operations.begin_auto_share_wait()
+    operations.reset_transport()
+    assert not media.suppressed and not operations.transport_blocked and not operations.seek_blocked
+    media.position_changed.emit(4000)
+    media.pause.assert_not_called()
 
 
-def test_successful_auto_share_resumes_regular_video_and_unlocks_controls():
-    bar = _make_bar()
-    bar.begin_auto_share_playback_wait()
-
-    bar.resolve_auto_share_playback_wait(True)
-
-    assert bar._auto_share_playback_waiting is False
-    assert bar.media.played == 1
-    assert bar.play_btn.enabled is True
-    assert bar.seek_slider.enabled is True
+def test_protection_blocks_seek_but_not_toggle(playback):
+    operations, media, protection = playback
+    protection.locked = True
+    assert not operations.seek(123)
+    operations.toggle()
+    protection.seek.assert_not_called()
+    media.toggle_play_pause.assert_called_once()
 
 
-def test_failed_auto_share_keeps_regular_video_paused_and_unlocks_controls():
-    bar = _make_bar()
-    bar.begin_auto_share_playback_wait()
-
-    bar.resolve_auto_share_playback_wait(False)
-
-    assert bar._auto_share_playback_waiting is False
-    assert bar.media.played == 0
-    assert bar.play_btn.enabled is True
-    assert bar.seek_slider.enabled is True
-
-
-def test_announcement_mode_retains_precedence_after_auto_share_resolution():
-    for success in (True, False):
-        bar = _make_bar()
-        bar.begin_auto_share_playback_wait()
-        bar.begin_announcement_mode()
-
-        assert bar._announce_timer.started == 0
-
-        bar.resolve_auto_share_playback_wait(success)
-
-        assert bar._announce_state == "gate"
-        assert bar._auto_share_playback_waiting is False
-        assert bar._announce_timer.started == 1
-        assert bar.media.played == 1
-        assert bar.play_btn.enabled is False
-        assert bar.seek_slider.enabled is False
-
-
-def test_cancel_announcement_mode_restores_audio_and_controls():
-    bar = _make_bar()
-    bar.begin_announcement_mode()
-
-    bar._cancel_announcement_mode()
-
-    assert bar._announce_state == "off"
-    assert bar._announce_timer.stopped == 1
-    assert not bar.media.audio_suppressed
-    assert bar.play_btn.enabled is True
-    assert bar.seek_slider.enabled is True
+def test_automatic_playback_indicator_tracks_queue_and_loop(playback):
+    operations, _, _ = playback
+    operations.commit_queue(operations.new_queue([{}, {}], order="next"))
+    assert operations.has_pending_automatic_playback
+    operations.commit_queue(operations.queue.select(1))
+    assert not operations.has_pending_automatic_playback
+    operations.set_order("random")
+    assert operations.has_pending_automatic_playback
+    operations.commit_queue(operations.queue.select(0))
+    assert not operations.has_pending_automatic_playback
+    operations.toggle_loop()
+    assert operations.has_pending_automatic_playback

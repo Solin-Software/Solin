@@ -72,6 +72,7 @@ from .controllers.projection_integration_controller import (
     ProjectionIntegrationContext,
     ProjectionIntegrationController,
 )
+from .controllers.projection_playback_operations import ProjectionPlaybackOperations
 from .controllers.projection_stop_controller import (
     ProjectionStopContext,
     ProjectionStopController,
@@ -512,6 +513,9 @@ class MainWindow(QWidget):
         self.playback_protection.manualChangeBlocked.connect(
             self._notify_playback_protection_blocked
         )
+        self._projection_playback = ProjectionPlaybackOperations(
+            self.media_ctrl, self._projection_playback_settings, self.playback_protection, self
+        )
         self._media_countdown_automation = MediaCountdownAutomationController(
             settings=self._media_countdown_settings,
             schedule_source=self._meeting_schedule_settings,
@@ -641,6 +645,7 @@ class MainWindow(QWidget):
 
         self._ui_controller = MainWindowUiController(
             MainWindowUiContext(
+                projection_playback=self._projection_playback,
                 parent=self,
                 event_filter=self,
                 set_central_widget=self._set_content_widget,
@@ -850,6 +855,7 @@ class MainWindow(QWidget):
         self._auto_key_projection = AutoKeyProjectionController(self._auto_keys, self.proj_bar)
         self._projection_integrations = ProjectionIntegrationController(
             ProjectionIntegrationContext(
+                projection_playback=self._projection_playback,
                 projection_session=self.projection_session,
                 obs_scene_session=self._obs_scene_session,
                 auto_key_projection=self._auto_key_projection,
@@ -887,40 +893,9 @@ class MainWindow(QWidget):
 
         self.destroyed.connect(release_projection_asset)
         self._release_projection_asset = release_projection_asset
-        self._media_projection = MediaProjectionController(
-            MediaProjectionContext(
-                projection_session=self.projection_session,
-                projection_bar=self.proj_bar,
-                media_controller=self.media_ctrl,
-                ndi_service=self._ndi_service,
-                projection_windows=self._raw_projection_windows,
-                playlist_edit_is_temp=lambda: getattr(
-                    self.playlist_widget, "is_temporary_edit", False
-                ),
-                meeting_service=lambda: self.meetings_widget.get_service(),
-                dialog_parent=self,
-                sjjm_announce_mode=self._media_settings.sjjm_announce_mode,
-                start_videos_paused=self._media_settings.start_videos_paused,
-                playback_protection=self.playback_protection,
-                content_frame_sink=self._program_content.submit_frame,
-                image_source_lease=lambda path: publication_assets.lease((path,)),
-                projection_aspect_ratio_provider=(
-                    lambda: projection_aspect_ratio_from_windows(
-                        tuple(self.projection_session.projection_windows)
-                    )
-                ),
-            ),
-            MediaProjectionHandlers(
-                stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
-                update_projection_status=(self._projection_integrations.update_status),
-                prepare_video_session=(self._auto_key_projection.prepare_video_session),
-                prepare_auto_share_playback=(
-                    self._projection_integrations.prepare_video_playback_for_auto_share
-                ),
-            ),
-        )
         self._projection_stop = ProjectionStopController(
             ProjectionStopContext(
+                projection_playback=self._projection_playback,
                 projection_session=self.projection_session,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
@@ -936,16 +911,50 @@ class MainWindow(QWidget):
                 ),
             ),
         )
+        self._media_projection = MediaProjectionController(
+            MediaProjectionContext(
+                projection_playback=self._projection_playback,
+                projection_session=self.projection_session,
+                projection_bar=self.proj_bar,
+                media_controller=self.media_ctrl,
+                ndi_service=self._ndi_service,
+                projection_windows=self._raw_projection_windows,
+                playlist_edit_is_temp=lambda: getattr(
+                    self.playlist_widget, "is_temporary_edit", False
+                ),
+                meeting_service=lambda: self.meetings_widget.get_service(),
+                dialog_parent=self,
+                sjjm_announce_mode=self._media_settings.sjjm_announce_mode,
+                start_videos_paused=self._media_settings.start_videos_paused,
+                content_frame_sink=self._program_content.submit_frame,
+                image_source_lease=lambda path: publication_assets.lease((path,)),
+                projection_aspect_ratio_provider=(
+                    lambda: projection_aspect_ratio_from_windows(
+                        tuple(self.projection_session.projection_windows)
+                    )
+                ),
+            ),
+            MediaProjectionHandlers(
+                stop_projection=self._projection_stop.stop_any,
+                stop_browser_tab_projection=(self._navigation.stop_browser_tab_projection),
+                update_projection_status=(self._projection_integrations.update_status),
+                prepare_video_session=(self._auto_key_projection.prepare_video_session),
+                prepare_auto_share_playback=(
+                    self._projection_integrations.prepare_video_playback_for_auto_share
+                ),
+            ),
+        )
         self._media_playback_notifications = MediaPlaybackNotificationController(
             self.notifications,
             self.media_ctrl,
-            current_title=self.proj_bar.current_media_title,
+            current_title=lambda: str(self.projection_session.state.get("title") or ""),
             stop_projection=self._projection_stop.stop_projection,
             parent=self,
         )
         self._media_playback_notifications.start()
         self._live_integrations = LiveIntegrationController(
             LiveIntegrationContext(
+                projection_playback=self._projection_playback,
                 projection_session=self.projection_session,
                 obs_scene_session=self._obs_scene_session,
                 obs_settings=self._obs_settings,
@@ -968,6 +977,7 @@ class MainWindow(QWidget):
         )
         self._timer_projection_controller = TimerProjectionController(
             TimerProjectionContext(
+                projection_playback=self._projection_playback,
                 projection_session=self.projection_session,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
@@ -1000,7 +1010,6 @@ class MainWindow(QWidget):
                 playlist_widget=self.playlist_widget,
                 projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
-                playback_protection=self.playback_protection,
                 screen_manager=self.screen_mgr,
                 language_manager=self.lang,
                 settings_widget=self.settings_widget,
@@ -1523,6 +1532,7 @@ class MainWindow(QWidget):
         self._remote_media_thumbnail_extractor = extractor
         controller = RemoteControlController(
             RemoteControlDependencies(
+                projection_playback=self._projection_playback,
                 runtime_paths=self.runtime_paths,
                 active_profile_id=self.active_profile.id,
                 active_profile_name=self.active_profile.name,
@@ -1538,11 +1548,9 @@ class MainWindow(QWidget):
                 meeting_thumbnail_store=self._meeting_thumbnail_store,
                 media_thumbnail_extractor=extractor,
                 projection_session=self.projection_session,
-                projection_bar=self.proj_bar,
                 media_controller=self.media_ctrl,
                 media_projection=self._media_projection,
                 projection_stop=self._projection_stop,
-                playback_protection=self.playback_protection,
                 timer_operations=self.timer_operations,
                 settings_widget=self.settings_widget,
                 timer_feature_flags=DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
@@ -1797,16 +1805,6 @@ class MainWindow(QWidget):
 
     def _edit_view_is_temp(self) -> bool:
         return self._media_projection.edit_view_is_temp()
-
-    def _project_video_core(
-        self, url: str, title: str, keep_expanded: bool = False, is_audio: bool = False
-    ):
-        self._media_projection.project_video_core(
-            url,
-            title,
-            keep_expanded=keep_expanded,
-            is_audio=is_audio,
-        )
 
     def _stop_projection(self):
         self._projection_stop.stop_projection()

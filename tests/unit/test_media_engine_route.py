@@ -280,6 +280,37 @@ def test_engine_state_drives_signals_and_properties(tmp_path):
     assert ended == [True]  # media_ended fires once
 
 
+def test_replay_ignores_queued_end_until_the_decoder_restarts(tmp_path):
+    controller, _played = _controller(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/clip.mp4"))
+    ended = []
+    controller.media_ended.connect(lambda: ended.append(True))
+    eof = MediaPlaybackNativeState(MediaPlaybackState.ENDED, 0, 2000)
+
+    controller.on_engine_media_state(eof)
+    controller.replay()
+    controller.on_engine_media_state(eof)
+    assert ended == [True]
+
+    controller.on_engine_media_state(MediaPlaybackNativeState(MediaPlaybackState.PLAYING, 0, 2000))
+    controller.on_engine_media_state(eof)
+    assert ended == [True, True]
+
+
+def test_first_duration_observer_sees_the_same_decoders_end_state(tmp_path):
+    controller, _played = _controller(tmp_path)
+    controller.set_engine_media_route(_FakeRoute())
+    controller.start_playback(MediaPlaybackRequest("/clip.mp4"))
+    observed = []
+    controller.duration_changed.connect(
+        lambda duration: observed.append((duration, controller.is_ended))
+    )
+
+    controller.on_engine_media_state(MediaPlaybackNativeState(MediaPlaybackState.ENDED, 0, 2000))
+    assert observed == [(2000, True)]
+
+
 def test_engine_state_ignored_when_not_routed(tmp_path):
     controller, _played = _controller(tmp_path)
     ended: list[bool] = []

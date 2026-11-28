@@ -1033,11 +1033,14 @@ def _smoke_png() -> bytes:
     )
 
 
-def _decoded_media_event(response: SceneIpcEnvelope, path: str) -> bool:
+def _decoded_media_event(response: SceneIpcEnvelope, request: SceneIpcEnvelope) -> bool:
     payload = response.payload
     return (
         response.message_type == "media_playback_state"
-        and payload.get("path") == path
+        and response.request_id == request.request_id
+        and response.session_id == request.session_id
+        and response.process_generation == request.process_generation
+        and payload.get("path") == request.payload["path"]
         and type(payload.get("slot")) is int
         and payload["slot"] == 0
         and type(payload.get("state")) is int
@@ -1084,13 +1087,13 @@ def _run_preview_smoke(
             protocol_errors: list[SceneIpcError] = []
             rejected = threading.Event()
             decoded = threading.Event()
-            media_path = str(requests[2].payload["path"])
+            media_request = requests[2]
 
             def read_protocol() -> None:
                 try:
                     while response := read_envelope(process.stdout):
                         output.append(encode_envelope(response))
-                        if _decoded_media_event(response, media_path):
+                        if _decoded_media_event(response, media_request):
                             decoded.set()
                         if response.message_type == "error" or (
                             response.message_type == "ack"
@@ -1244,20 +1247,23 @@ def verify_packaged_sidecar(executable: Path, *, timeout: float = 45.0) -> None:
         raise LibobsPackagingError(
             f"Packaged sidecar exited with {result.returncode}:\n{diagnostics}"
         )
-    responses: dict[str, SceneIpcEnvelope] = {}
+    media_request = requests[2]
+    responses: dict[tuple[str, str], SceneIpcEnvelope] = {}
     media_decoded = False
     stream = io.BytesIO(result.stdout)
     try:
         while response := read_envelope(stream):
-            responses[response.request_id] = response
-            media_decoded = media_decoded or _decoded_media_event(response, str(media))
+            if response.message_type in {"hello_ack", "ack", "heartbeat"}:
+                responses[response.message_type, response.request_id] = response
+            elif _decoded_media_event(response, media_request):
+                media_decoded = True
     except SceneIpcError as error:
         raise LibobsPackagingError(
             f"Invalid packaged sidecar IPC: {error}\n{diagnostics}"
         ) from error
     for request, expected in zip(requests, ("hello_ack", "ack", "ack", "heartbeat"), strict=True):
-        response = responses.get(request.request_id)
-        if response is None or response.message_type != expected:
+        response = responses.get((expected, request.request_id))
+        if response is None:
             raise LibobsPackagingError(f"Missing packaged sidecar {expected}:\n{diagnostics}")
         if (response.session_id, response.process_generation, response.sequence) != (
             request.session_id,
@@ -1270,7 +1276,7 @@ def verify_packaged_sidecar(executable: Path, *, timeout: float = 45.0) -> None:
                 f"Packaged sidecar rejected {request.message_type}: "
                 f"{response.payload}\n{diagnostics}"
             )
-    if responses["hello"].payload.get("hardware_compositing") is not True:
+    if responses["hello_ack", "hello"].payload.get("hardware_compositing") is not True:
         raise LibobsPackagingError(f"Packaged libobs runtime failed to initialize:\n{diagnostics}")
     if not media_decoded:
         raise LibobsPackagingError(

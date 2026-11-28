@@ -59,20 +59,24 @@ class _ObsServiceStub:
 class _ProjectionBarStub:
     def __init__(self):
         self.obs_scene_states = []
-        self.auto_share_waits = 0
-        self.auto_share_resolutions = []
-        self.auto_share_cancellations = 0
 
     def set_obs_scene_is_media(self, active):
         self.obs_scene_states.append(active)
 
-    def begin_auto_share_playback_wait(self):
+
+class _ProjectionPlaybackStub:
+    def __init__(self):
+        self.auto_share_waits = 0
+        self.auto_share_resolutions = []
+        self.auto_share_cancellations = 0
+
+    def begin_auto_share_wait(self, *, resume_on_success=True):
         self.auto_share_waits += 1
 
-    def resolve_auto_share_playback_wait(self, success):
+    def resolve_auto_share_wait(self, success):
         self.auto_share_resolutions.append(success)
 
-    def cancel_auto_share_playback_wait(self):
+    def cancel_auto_share_wait(self):
         self.auto_share_cancellations += 1
 
 
@@ -104,6 +108,7 @@ class _WindowStub:
         self._obs_service = _ObsServiceStub(obs_connected, "Camera")
         self.obs_scene_session = ObsSceneSession()
         self.proj_bar = _ProjectionBarStub()
+        self.projection_playback = _ProjectionPlaybackStub()
         self.playback_protection = _PlaybackProtectionStub()
         self._auto_key_projection = _AutoKeyProjectionStub()
         self._visible = visible
@@ -148,6 +153,7 @@ def _controller(window):
             obs_settings=window._obs_settings,
             auto_share_settings=window._auto_share_settings,
             projection_bar=window.proj_bar,
+            projection_playback=window.projection_playback,
             interaction_guard=window.playback_protection,
             auto_share_finished=lambda *_args: None,
             start_auto_share=window.start_auto_share,
@@ -289,13 +295,13 @@ def test_visual_video_waits_for_pending_auto_share_and_resumes_on_success():
     controller = _controller(window)
 
     assert controller.prepare_video_playback_for_auto_share() is True
-    assert window.proj_bar.auto_share_waits == 1
+    assert window.projection_playback.auto_share_waits == 1
 
     controller.sync_zoom_share(active=True, visual=True)
     generation = controller._auto_share_generation
     controller.on_auto_share_finished(generation, True, True)
 
-    assert window.proj_bar.auto_share_resolutions == [True]
+    assert window.projection_playback.auto_share_resolutions == [True]
     assert controller._auto_share_start_pending is False
     assert window.playback_protection.owners == set()
     controller.cleanup()
@@ -314,7 +320,7 @@ def test_failed_auto_share_releases_video_without_successful_resume():
     generation = controller._auto_share_generation
     controller.on_auto_share_finished(generation, True, False)
 
-    assert window.proj_bar.auto_share_resolutions == [False]
+    assert window.projection_playback.auto_share_resolutions == [False]
     assert controller._auto_share_active is False
     assert window.playback_protection.owners == set()
     controller.cleanup()
@@ -331,7 +337,7 @@ def test_video_does_not_wait_when_auto_share_is_already_confirmed():
     controller._auto_share_start_pending = False
 
     assert controller.prepare_video_playback_for_auto_share() is False
-    assert window.proj_bar.auto_share_waits == 0
+    assert window.projection_playback.auto_share_waits == 0
     controller.cleanup()
 
 
@@ -346,7 +352,7 @@ def test_new_video_waits_while_existing_auto_share_start_is_pending():
     controller._auto_share_start_pending = True
 
     assert controller.prepare_video_playback_for_auto_share() is True
-    assert window.proj_bar.auto_share_waits == 1
+    assert window.projection_playback.auto_share_waits == 1
     controller.cleanup()
 
 
@@ -380,7 +386,7 @@ def test_auto_share_releases_interaction_lock_when_worker_launch_fails():
     controller.sync_zoom_share(active=True, visual=True)
 
     assert window.playback_protection.owners == set()
-    assert window.proj_bar.auto_share_resolutions == [False]
+    assert window.projection_playback.auto_share_resolutions == [False]
     assert controller._auto_share_active is False
     assert controller._auto_share_start_pending is False
     controller.cleanup()

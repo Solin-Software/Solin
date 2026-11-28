@@ -51,6 +51,7 @@ class MediaController(QObject):
     position_changed  = Signal(int)
     error_occurred    = Signal(str)
     media_ended       = Signal()
+    volume_changed    = Signal(float)
     cover_art_changed    = Signal(object)   # QPixmap | None
     title_from_metadata  = Signal(str)
 
@@ -159,6 +160,10 @@ class MediaController(QObject):
         return self._volume
 
     @property
+    def playback_rate(self) -> float:
+        return self._playback_rate
+
+    @property
     def is_playing(self) -> bool:
         return self._engine_route_active and self._engine_state == MediaPlaybackState.PLAYING
 
@@ -179,6 +184,10 @@ class MediaController(QObject):
     @property
     def is_paused(self) -> bool:
         return self._engine_route_active and self._engine_state == MediaPlaybackState.PAUSED
+
+    @property
+    def is_ended(self) -> bool:
+        return self._engine_route_active and self._engine_state == MediaPlaybackState.ENDED
 
     @property
     def duration(self) -> int:
@@ -282,16 +291,22 @@ class MediaController(QObject):
     def _apply_engine_media_state(self, state: MediaPlaybackNativeState) -> None:
         if state.source_request_id != self._engine_request_id:
             return
+        # Publish a coherent sample to duration and position listeners.
+        engine_state = state.state
+        state_changed = engine_state != self._engine_state
+        self._engine_state = engine_state
+        self._engine_audio_silent = state.audio_silent
+        self._engine_position_ms = max(0, int(state.position_ms))
+        if engine_state == MediaPlaybackState.PLAYING:
+            # A restart uses the same source ID. Ignore queued EOF samples
+            # until the decoder confirms that a new playback pass has started.
+            self._engine_media_ended_emitted = False
         duration = max(0, int(state.duration_ms))
         if duration != self._engine_duration_ms:
             self._engine_duration_ms = duration
             self.duration_changed.emit(duration)
-        self._engine_position_ms = max(0, int(state.position_ms))
         self.position_changed.emit(self._engine_position_ms)
-        engine_state = state.state
-        self._engine_audio_silent = state.audio_silent
-        if engine_state != self._engine_state:
-            self._engine_state = engine_state
+        if state_changed:
             self.state_changed.emit(
                 ENGINE_STATE_TO_SOLIN.get(engine_state, SolinPlaybackState.STOPPED)
             )
@@ -438,7 +453,6 @@ class MediaController(QObject):
     def replay(self):
         """Restart from the effective beginning without replacing the source."""
         if self._engine_route_active and self._engine_route is not None:
-            self._engine_media_ended_emitted = False
             self._session.set_requested_playing(True)
             self._engine_route.restart()
 
@@ -447,9 +461,12 @@ class MediaController(QObject):
             self._engine_route.seek(max(0, int(ms)))
 
     def set_volume(self, value: float):
+        previous = self._volume
         self._volume = max(0.0, min(1.0, float(value)))
         self._apply_playback_properties()
         self._publish_playback_audio_expected()
+        if self._volume != previous:
+            self.volume_changed.emit(self._volume)
 
     def set_audio_suppressed(self, suppressed: bool) -> None:
         """Temporarily silence output while keeping the configured volume."""

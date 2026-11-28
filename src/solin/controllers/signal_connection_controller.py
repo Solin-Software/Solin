@@ -16,7 +16,6 @@ class MainWindowSignalSources:
     playlist_widget: Any
     projection_bar: Any
     media_controller: Any
-    playback_protection: Any
     screen_manager: Any
     language_manager: Any
     settings_widget: Any
@@ -119,12 +118,9 @@ class SignalConnectionController:
         media_controller.title_from_metadata.connect(media_projection.on_title_from_metadata)
 
         projection_bar.stop_requested.connect(handlers.projection_stop.stop_any)
-        projection_bar.seek_requested.connect(sources.playback_protection.request_seek)
-        projection_bar.toggle_requested.connect(media_controller.toggle_play_pause)
-        projection_bar.volume_changed.connect(media_controller.set_volume)
         projection_bar.timer_updated.connect(timer_projection.on_timer_update_proj)
         projection_bar.timer_blink.connect(timer_projection.on_timer_blink_proj)
-        projection_bar.play_next_requested.connect(media_projection.project_next_auto)
+        media_controller.media_ended.connect(media_projection.on_media_ended)
         projection_bar.playlist_navigate.connect(media_projection.on_playlist_navigate)
         projection_bar.image_apply_transform.connect(media_projection.on_image_apply_transform)
         projection_bar.image_apply_transform_instant.connect(

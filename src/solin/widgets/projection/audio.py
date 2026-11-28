@@ -114,7 +114,5 @@ class ProjectionAudioMixin:
                 self._audio_cover_pixmap = pixmap
                 if self._expanded:
                     self._display_cover_pixmap(pixmap)
-            self._thumb_queue.invalidate(self._playlist_index)
             self._live_thumb_captured = True
-            self._thumb_queue.feed_live_cover(self._playlist_index, pixmap)
-            self.playlist_panel.set_thumbnail(self._playlist_index, pixmap)
+            self._thumb_queue.feed_live_cover(self._playback.queue.index, pixmap)

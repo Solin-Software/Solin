@@ -16,14 +16,20 @@ from PIL import Image
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 import pytest
 
+from solin.controllers.projection_playback_operations import (
+    PlaybackEndAction,
+    ProjectionPlaybackOperations,
+)
 from solin.controllers.remote_control_controller import (
     RemoteControlController,
     RemoteControlDependencies,
 )
 from solin.controllers.remote_media_adapter import RemoteMediaAdapter
+from solin.core.foundation.constants import ORDER_OFF
 from solin.core.media.formats import MediaKind
 from solin.core.media.thumbnail_identity import thumbnail_storage_id
 from solin.core.meetings.tree_store import MeetingTreeOverview, MeetingTreeStore
+from solin.core.projection.result import ProjectionResult, ProjectionResultStatus
 from solin.core.remote_control.certificates import TLSCertificateStore
 from solin.core.remote_control.features import (
     DEFAULT_TIMER_REMOTE_FEATURE_FLAGS,
@@ -35,6 +41,7 @@ from solin.core.remote_control.media.contracts import (
     CatalogNode,
     CatalogNodeKind,
     CommandErrorCode,
+    NextCommand,
     PauseCommand,
     PlaybackState,
     PlayCommand,
@@ -42,6 +49,8 @@ from solin.core.remote_control.media.contracts import (
     ProjectionSource,
     RemoteMediaKind,
     ResumeCommand,
+    SeekCommand,
+    SetVolumeCommand,
 )
 from solin.core.remote_control.media.state import ProjectionCommandSession
 from solin.core.remote_control.media.thumbnails import render_media_placeholder_thumbnail
@@ -132,6 +141,7 @@ class _ProjectionSession:
 
 
 class _MediaController(QObject):
+    volume_changed = Signal(float)
     state_changed = Signal(object)
     duration_changed = Signal(int)
     position_changed = Signal(int)
@@ -144,6 +154,7 @@ class _MediaController(QObject):
         self.session_id = 0
         self.is_playing = False
         self.is_paused = False
+        self.is_ended = False
 
     def play(self) -> None:
         self.is_playing = True
@@ -153,36 +164,43 @@ class _MediaController(QObject):
         self.is_playing = False
         self.is_paused = True
 
+    def replay(self) -> None:
+        self.position = 0
+        self.play()
 
-class _ProjectionBar(QObject):
-    volume_changed = Signal(float)
 
+    def set_volume(self, volume: float) -> None:
+        self.volume = volume
+        self.volume_changed.emit(volume)
+
+    def set_playback_rate(self, rate: float) -> None:
+        self.playback_rate = rate
+
+    def seek(self, position: int) -> None:
+        self.position = position
+
+    def set_audio_suppressed(self, suppressed: bool) -> None:
+        self.audio_suppressed = suppressed
+
+
+class _PlaybackSettings:
     def __init__(self) -> None:
-        super().__init__()
-        self.items: list[dict[str, Any]] = []
-        self.playlist_index = 0
-        self.volume_percent = 72
+        self._volume = 0.72
 
-    def playlist_items(self) -> list[dict[str, Any]]:
-        return list(self.items)
+    def volume(self) -> float:
+        return self._volume
 
-    def current_media_title(self) -> str:
-        return "Fallback title"
+    def set_volume(self, volume: float) -> None:
+        self._volume = volume
 
-    def can_navigate_previous(self) -> bool:
-        return self.playlist_index > 0
+    def speed(self) -> float:
+        return 1.0
 
-    def can_navigate_next(self) -> bool:
-        return self.playlist_index < len(self.items) - 1
+    def playback_order(self) -> str:
+        return ORDER_OFF
 
-    def navigate_previous(self) -> bool:
+    def loop_enabled(self) -> bool:
         return False
-
-    def navigate_next(self) -> bool:
-        return False
-
-    def set_volume_percent(self, value: int) -> None:
-        self.volume_percent = value
 
 
 class _RemoteSettings(QObject):
@@ -213,26 +231,40 @@ class _PlaybackProtection(QObject):
     lockedChanged = Signal()
     locked = False
 
-    def __init__(self) -> None:
+    def __init__(self, media: _MediaController) -> None:
         super().__init__()
+        self.media = media
 
     def allow_manual_projection_change(self, *, notify: bool) -> bool:
-        del notify
-        return True
+        return not self.locked
 
-    def request_seek(self, _position: int) -> bool:
+    def request_seek(self, position: int) -> bool:
+        if self.locked:
+            return False
+        self.media.seek(position)
         return True
 
 
 class _MediaProjection:
     def __init__(self) -> None:
         self.projected: tuple[list[dict[str, Any]], int] | None = None
+        self.start_paused = False
+        self.navigation_result = ProjectionResult(ProjectionResultStatus.ACCEPTED)
 
-    def project_media_at_index(self, items: list[dict[str, Any]], index: int) -> None:
+    def project_media_at_index(
+        self, items: list[dict[str, Any]], index: int, *, notify: bool, start_paused: bool
+    ) -> ProjectionResult:
         self.projected = (items, index)
+        self.start_paused = start_paused
+        return ProjectionResult(ProjectionResultStatus.ACCEPTED)
 
-    def on_meeting_media_project(self, _media: object) -> None:
-        pass
+    def on_playlist_navigate(self, _index: int, *, notify: bool) -> ProjectionResult:
+        return self.navigation_result
+
+    def on_meeting_media_project(
+        self, _media: object, *, notify: bool, start_paused: bool
+    ) -> ProjectionResult:
+        return ProjectionResult(ProjectionResultStatus.ACCEPTED)
 
 
 class _TimerEngine(QObject):
@@ -288,8 +320,10 @@ def _controller(
     meeting_repository = MeetingTreeStore(tmp_path / "meeting-trees.json")
     watched_store = _WatchedStore()
     projection_session = _ProjectionSession()
-    projection_bar = _ProjectionBar()
     media_controller = _MediaController()
+    playback_operations = ProjectionPlaybackOperations(
+        media_controller, _PlaybackSettings(), _PlaybackProtection(media_controller)
+    )
     media_projection = _MediaProjection()
     media_thumbnail_extractor = _MediaThumbnailExtractor()
     timer_operations = _TimerOperations()
@@ -321,18 +355,17 @@ def _controller(
             meeting_thumbnail_store=_ThumbnailStore(tmp_path / "meeting-thumbs"),
             media_thumbnail_extractor=media_thumbnail_extractor,
             projection_session=projection_session,
-            projection_bar=projection_bar,
+            projection_playback=playback_operations,
             media_controller=media_controller,
             media_projection=media_projection,
             projection_stop=SimpleNamespace(stop_projection=lambda: None),
-            playback_protection=_PlaybackProtection(),
             timer_operations=timer_operations,
             settings_widget=_SettingsWidget(),
             timer_feature_flags=timer_feature_flags,
         ),
         None,
     )
-    return controller, projection_session, projection_bar, media_controller, media_projection
+    return controller, projection_session, playback_operations, media_controller, media_projection
 
 
 def test_catalog_revision_stays_aligned_when_initial_public_catalog_is_empty(
@@ -1205,7 +1238,7 @@ def test_play_uses_the_exact_private_catalog_published_to_remote_clients(
 def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
     tmp_path: Path,
 ) -> None:
-    controller, session, bar, media, _projection = _controller(tmp_path, [])
+    controller, session, playback_operations, media, _projection = _controller(tmp_path, [])
     adapter = controller._media_adapter
     controller.media_state.update_catalog(
         (
@@ -1240,7 +1273,7 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
     media.duration = 120_000
     media.position = 23_000
     media.is_playing = True
-    bar.items = [
+    playback_operations.commit_queue(playback_operations.new_queue([
         {
             "id": "media-1",
             "title": "Opening",
@@ -1249,7 +1282,7 @@ def test_playback_snapshot_mirrors_desktop_queue_capabilities_and_position(
             "origin_container_id": "playlist-1",
             "origin_item_id": "media-1",
         }
-    ]
+    ]))
 
     adapter._refresh_playback()
     playback = controller.media_state.playback
@@ -1402,7 +1435,7 @@ def test_failed_meeting_artwork_keeps_the_original_video_placeholder(
 def test_session_command_is_revalidated_on_main_thread_before_effect(
     tmp_path: Path,
 ) -> None:
-    controller, session, _bar, media, _projection = _controller(tmp_path, [])
+    controller, session, _playback_operations, media, _projection = _controller(tmp_path, [])
     adapter = controller._media_adapter
     session.state_type = "video"
     session.state = {"type": "video", "title": "First media"}
@@ -1419,7 +1452,6 @@ def test_session_command_is_revalidated_on_main_thread_before_effect(
     session.state = {"type": "video", "title": "Replacement media"}
     session.session_id = 2
     media.session_id = 2
-    adapter._refresh_playback()
     error = adapter._execute_command(command)
 
     assert error is not None
@@ -1428,27 +1460,106 @@ def test_session_command_is_revalidated_on_main_thread_before_effect(
     controller.stop()
 
 
-def test_remote_resume_uses_projection_playback_controls(tmp_path: Path) -> None:
-    controller, session, bar, media, _projection = _controller(tmp_path, [])
+def test_remote_resume_and_seek_respect_shared_auto_share_gate(tmp_path: Path) -> None:
+    controller, session, playback, media, _projection = _controller(tmp_path, [])
+    adapter = controller._media_adapter
+    session.state_type = "video"
+    session.state = {"type": "video", "title": "Prepared video"}
+    media.is_paused = True
+    media.duration = 30_000
+    adapter._refresh_playback()
+    session_id = controller.media_state.playback.playback_session_id
+    assert session_id is not None
+
+    playback.begin_auto_share_wait()
+    resume = ResumeCommand(str(uuid.uuid4()), session_id)
+    seek = SeekCommand(str(uuid.uuid4()), session_id, 15_000)
+    try:
+        resume_error = adapter._execute_command(resume)
+        seek_error = adapter._execute_command(seek)
+        assert resume_error is not None and resume_error.code is CommandErrorCode.BLOCKED
+        assert seek_error is not None and seek_error.code is CommandErrorCode.BLOCKED
+        assert media.is_paused
+        assert media.position == 0
+        assert not controller.media_state.playback.capabilities.can_resume
+        assert not controller.media_state.playback.capabilities.can_seek
+
+        playback.resolve_auto_share_wait(False)
+        assert adapter._execute_command(resume) is None
+        assert controller.media_state.playback.state is PlaybackState.PLAYING
+    finally:
+        controller.stop()
+
+
+@pytest.mark.parametrize("ended", [False, True])
+def test_remote_resume_restarts_a_prepared_announcement_with_audio(
+    tmp_path: Path, ended: bool
+) -> None:
+    controller, session, playback, media, _projection = _controller(tmp_path, [])
     adapter = controller._media_adapter
     session.state_type = "video"
     session.state = {"type": "video", "title": "Prepared song"}
-    media.is_paused = True
-    resumes = []
-
-    def resume_playback() -> None:
-        resumes.append(True)
-        media.play()
-
-    bar.resume_playback = resume_playback
+    playback.begin_announcement()
+    media.position = 2_000 if ended else 3_500
+    media.position_changed.emit(media.position)
+    if ended:
+        # The native decoder reports neither playing nor paused after EOF.
+        media.is_ended = True
+        assert playback.after_media_ended() is PlaybackEndAction.HOLD
     adapter._refresh_playback()
     session_id = controller.media_state.playback.playback_session_id
     assert session_id is not None
 
     try:
+        assert controller.media_state.playback.state is PlaybackState.PAUSED
+        assert controller.media_state.playback.capabilities.can_resume
         assert adapter._execute_command(ResumeCommand(str(uuid.uuid4()), session_id)) is None
-        assert resumes == [True]
+        assert media.position == 0
+        assert not media.audio_suppressed
         assert controller.media_state.playback.state is PlaybackState.PLAYING
+    finally:
+        controller.stop()
+
+
+def test_remote_volume_updates_shared_playback_and_its_snapshot(tmp_path: Path) -> None:
+    controller, session, playback, media, _projection = _controller(tmp_path, [])
+    adapter = controller._media_adapter
+    session.state_type = "video"
+    session.state = {"type": "video", "title": "Current"}
+    adapter._refresh_playback()
+    session_id = controller.media_state.playback.playback_session_id
+    assert session_id is not None
+
+    try:
+        assert adapter._execute_command(SetVolumeCommand(str(uuid.uuid4()), session_id, 34)) is None
+        assert media.volume == playback.volume == 0.34
+        assert controller.media_state.playback.volume == 34
+        playback.toggle_mute()
+        playback.toggle_mute()
+        assert media.volume == 0.34
+    finally:
+        controller.stop()
+
+
+def test_remote_navigation_reports_projection_failure(tmp_path: Path) -> None:
+    controller, session, playback, _media, projection = _controller(tmp_path, [])
+    adapter = controller._media_adapter
+    session.state_type = "video"
+    session.state = {"type": "video", "title": "Current"}
+    playback.commit_queue(playback.new_queue([
+        {"type": "video", "title": "Current"},
+        {"type": "image", "title": "Unavailable"},
+    ]))
+    projection.navigation_result = ProjectionResult(ProjectionResultStatus.FAILED)
+    adapter._refresh_playback()
+    session_id = controller.media_state.playback.playback_session_id
+    assert session_id is not None
+
+    try:
+        error = adapter._execute_command(NextCommand(str(uuid.uuid4()), session_id))
+        assert error is not None and error.code is CommandErrorCode.UNAVAILABLE
+        assert controller.media_state.playback.current_index == 0
+        assert controller.media_state.playback.title == "Current"
     finally:
         controller.stop()
 
@@ -1456,7 +1567,7 @@ def test_remote_resume_uses_projection_playback_controls(tmp_path: Path) -> None
 def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(
     tmp_path: Path,
 ) -> None:
-    controller, session, bar, media, _projection = _controller(tmp_path, [])
+    controller, session, playback_operations, media, _projection = _controller(tmp_path, [])
     adapter = controller._media_adapter
     adapter._active = True
     session.state_type = "video"
@@ -1466,13 +1577,13 @@ def test_playback_snapshot_sanitizes_private_titles_queue_and_errors(
     }
     session.session_id = 4
     media.session_id = 8
-    bar.items = [
+    playback_operations.commit_queue(playback_operations.new_queue([
         {
             "id": r"C:\Private\media-1",
             "title": "https://private.invalid/media.mp4",
             "type": "video",
         }
-    ]
+    ]))
     adapter._on_media_error(r"Could not open C:\Users\TestUser\secret.mp4")
     playback = controller.media_state.playback
     encoded = json.dumps(playback.to_dict())
