@@ -1,22 +1,25 @@
-from solin.widgets.playlist.list_view import PLAYLIST_PRIMARY_BUTTON_STYLESHEET, PLAYLIST_SECONDARY_BUTTON_STYLESHEET
-
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from pathlib import Path
-from time import monotonic
 
 import pytest
-from PySide6.QtCore import QThread, QTimer
-from PySide6.QtTest import QTest
+from PySide6.QtCore import QEventLoop, QThread, QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
-from solin.widgets.playlist.list_view import PlaylistListView
-from solin.widgets.playlist.dialogs import LinkedFolderNameDialog, NameDialog
-from solin.widgets.playlist import list_view
 from solin.controllers.media_operation_coordinator import MediaOperationCoordinator
 from solin.core.foundation.resource_lanes import ResourceLaneRegistry
 from solin.core.ingest.watched_folder_files import WatchedFolderFileStore
 from solin.core.ingest.watched_folder_playlists import WatchedFolderPlaylistStore
+from solin.core.media.operations import MediaOperationRecord, MediaOperationState
+from solin.widgets.playlist import list_view
+from solin.widgets.playlist.dialogs import LinkedFolderNameDialog, NameDialog
+from solin.widgets.playlist.list_view import (
+    PLAYLIST_PRIMARY_BUTTON_STYLESHEET,
+    PLAYLIST_SECONDARY_BUTTON_STYLESHEET,
+    PlaylistListView,
+)
 
 
 def test_playlist_list_view_styles_define_primary_and_secondary_buttons():
@@ -48,15 +51,65 @@ def test_linked_sync_reset_requires_confirmation_and_uses_worker(monkeypatch, co
         submit.assert_not_called()
 
 
-def _wait_for(predicate):
-    deadline = monotonic() + 5
-    while not predicate() and monotonic() < deadline:
-        QTest.qWait(5)
-    assert predicate()
+@contextmanager
+def _expect_folder_operations(
+    operations: MediaOperationCoordinator, **expected: MediaOperationState | None
+) -> Iterator[None]:
+    """Wait for the requested operations. None accepts any terminal outcome."""
+    loop = QEventLoop()
+    watchdog = QTimer()
+    watchdog.setSingleShot(True)
+    watchdog.timeout.connect(loop.quit)
+    pending = expected.copy()
+    finished: dict[str, MediaOperationRecord] = {}
+    unexpected_outcome = False
+
+    def on_finished(operation_id: str, _state: str) -> None:
+        nonlocal unexpected_outcome
+        record = operations.record(operation_id)
+        if record is None or record.operation_type not in pending:
+            return
+        expected_state = pending.pop(record.operation_type)
+        finished[record.operation_type] = record
+        if expected_state is not None and record.state != expected_state:
+            unexpected_outcome = True
+        if unexpected_outcome or not pending:
+            loop.quit()
+
+    operations.operationFinished.connect(on_finished)
+    try:
+        yield
+        if pending and not unexpected_outcome:
+            # Let Python workers acquire the GIL while Qt delivers their results.
+            watchdog.start(5000)
+            loop.exec()
+    finally:
+        watchdog.stop()
+        operations.operationFinished.disconnect(on_finished)
+
+    if pending or unexpected_outcome:
+        outcomes = {
+            kind: f"{record.state.value} ({record.error})" if record.error else record.state.value
+            for kind, record in finished.items()
+        }
+        pytest.fail(
+            f"Expected folder operations {expected}, observed {outcomes}, "
+            f"still waiting for {list(pending)} "
+            f"(active={operations.active_count}, queued={operations.queued_count})",
+            pytrace=False,
+        )
 
 
 @pytest.fixture
-def linked_folder_view(tmp_path):
+def linked_folder_errors(monkeypatch):
+    errors = Mock(return_value=QMessageBox.StandardButton.Ok)
+    # A real modal error dialog would block the coordinator's failure callback.
+    monkeypatch.setattr(QMessageBox, "critical", errors)
+    return errors
+
+
+@pytest.fixture
+def linked_folder_view(tmp_path, linked_folder_errors):
     root = tmp_path / "linked"
     root.mkdir()
     lanes = ResourceLaneRegistry()
@@ -85,8 +138,11 @@ def _answer_folder_dialog(monkeypatch, name, *, accepted=True):
     class AnsweredDialog(LinkedFolderNameDialog):
         def exec(self):
             self.name_edit.setText(name)
-            QTimer.singleShot(0, self.accept if accepted else self.reject)
-            return super().exec()
+            if accepted:
+                self.accept()
+            else:
+                self.reject()
+            return self.result()
 
     monkeypatch.setattr(list_view, "LinkedFolderNameDialog", AnsweredDialog)
 
@@ -127,7 +183,7 @@ def test_linked_folder_dialog_checks_siblings_without_changing_app_playlist_sema
 
 
 def test_create_linked_folder_uses_worker_and_refreshes_empty_card(linked_folder_view, monkeypatch):
-    view, root, _operations = linked_folder_view
+    view, root, operations = linked_folder_view
     files = view._watched_folder_file_store
     create = files.create_folder
     enumerate_names = files.folder_entry_names
@@ -146,13 +202,20 @@ def test_create_linked_folder_uses_worker_and_refreshes_empty_card(linked_folder
     monkeypatch.setattr(files, "folder_entry_names", enumerate_in_worker)
     _answer_folder_dialog(monkeypatch, "Reunia\u0303o")
     assert not view._create_folder_btn.isEnabled()
-    view.refresh_watched()
-    _wait_for(view._create_folder_btn.isEnabled)
+    with _expect_folder_operations(operations, linked_folder_catalog_scan=MediaOperationState.READY):
+        view.refresh_watched()
+    assert view._create_folder_btn.isEnabled()
     assert not view._wf_section.isHidden()
     assert not view._wf_cards
-    view._create_folder_btn.click()
-    assert not view._create_folder_btn.isEnabled()
-    _wait_for(lambda: len(view._wf_cards) == 1 and view._create_folder_btn.isEnabled())
+    with _expect_folder_operations(
+        operations,
+        create_linked_playlist_folder=MediaOperationState.READY,
+        linked_folder_catalog_scan=MediaOperationState.READY,
+    ):
+        view._create_folder_btn.click()
+        assert not view._create_folder_btn.isEnabled()
+    assert view._create_folder_btn.isEnabled()
+    assert len(view._wf_cards) == 1
 
     folder = root / "Reunião"
     assert worker_calls == [True]
@@ -163,26 +226,34 @@ def test_create_linked_folder_uses_worker_and_refreshes_empty_card(linked_folder
 
 
 def test_create_linked_folder_cancel_does_not_submit_mutation(linked_folder_view, monkeypatch):
-    view, root, _operations = linked_folder_view
-    view.refresh_watched()
-    _wait_for(view._create_folder_btn.isEnabled)
+    view, root, operations = linked_folder_view
+    with _expect_folder_operations(operations, linked_folder_catalog_scan=MediaOperationState.READY):
+        view.refresh_watched()
+    assert view._create_folder_btn.isEnabled()
     _answer_folder_dialog(monkeypatch, "Cancelled", accepted=False)
     view._create_folder_btn.click()
     assert not view._watched_mutation_operation_ids
     assert list(root.iterdir()) == []
 
 
-def test_create_linked_folder_revalidates_a_late_collision(linked_folder_view, monkeypatch):
-    view, root, _operations = linked_folder_view
-    view.refresh_watched()
-    _wait_for(view._create_folder_btn.isEnabled)
+def test_create_linked_folder_revalidates_a_late_collision(
+    linked_folder_view, linked_folder_errors, monkeypatch
+):
+    view, root, operations = linked_folder_view
+    with _expect_folder_operations(operations, linked_folder_catalog_scan=MediaOperationState.READY):
+        view.refresh_watched()
+    assert view._create_folder_btn.isEnabled()
     (root / "PLAYLIST").mkdir()
     (root / "PLAYLIST" / "keep.txt").write_text("keep")
-    warnings = Mock()
-    monkeypatch.setattr(QMessageBox, "critical", warnings)
     _answer_folder_dialog(monkeypatch, "Playlist")
-    view._create_folder_btn.click()
-    _wait_for(lambda: bool(warnings.call_count) and view._create_folder_btn.isEnabled())
+    with _expect_folder_operations(
+        operations,
+        create_linked_playlist_folder=MediaOperationState.FAILED,
+        linked_folder_catalog_scan=MediaOperationState.READY,
+    ):
+        view._create_folder_btn.click()
+    linked_folder_errors.assert_called_once()
+    assert view._create_folder_btn.isEnabled()
 
     assert len(list(root.iterdir())) == 1
     assert (root / "PLAYLIST" / "keep.txt").read_text() == "keep"
@@ -190,9 +261,9 @@ def test_create_linked_folder_revalidates_a_late_collision(linked_folder_view, m
 
 
 def test_linked_folder_creation_disabled_for_missing_or_unconfigured_root(linked_folder_view):
-    view, root, _operations = linked_folder_view
-    view.set_watched_folder(str(root / "missing"))
-    _wait_for(lambda: not view._watched_scan_operation_id)
+    view, root, operations = linked_folder_view
+    with _expect_folder_operations(operations, linked_folder_catalog_scan=None):
+        view.set_watched_folder(str(root / "missing"))
     assert not view._create_folder_btn.isEnabled()
     assert not (root / "missing").exists()
     view.set_watched_folder("")
@@ -202,17 +273,24 @@ def test_linked_folder_creation_disabled_for_missing_or_unconfigured_root(linked
 
 
 def test_linked_folder_rename_uses_same_dialog_and_policy(linked_folder_view, monkeypatch):
-    view, root, _operations = linked_folder_view
+    view, root, operations = linked_folder_view
     source = root / "Original"
     source.mkdir()
     (source / "keep.txt").write_text("keep")
-    view.refresh_watched()
-    _wait_for(view._create_folder_btn.isEnabled)
+    with _expect_folder_operations(operations, linked_folder_catalog_scan=MediaOperationState.READY):
+        view.refresh_watched()
+    assert view._create_folder_btn.isEnabled()
     _answer_folder_dialog(monkeypatch, "Renamed")
-    view._rename_watched_folder(str(source))
-    _wait_for(lambda: view._create_folder_btn.isEnabled() and (root / "Renamed").is_dir())
+    with _expect_folder_operations(
+        operations,
+        rename_linked_playlist_folder=MediaOperationState.READY,
+        linked_folder_catalog_scan=MediaOperationState.READY,
+    ):
+        view._rename_watched_folder(str(source))
 
+    assert view._create_folder_btn.isEnabled()
     assert not source.exists()
+    assert (root / "Renamed").is_dir()
     assert (root / "Renamed" / "keep.txt").read_text() == "keep"
     assert Path(view._wf_cards[0].path).name == "Renamed"
 
