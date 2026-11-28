@@ -44,7 +44,7 @@ def _configure_import_root(engine: QQmlEngine, qml_root: Path) -> None:
         return
     if not has_source:
         raise RuntimeError(f"No Solin QML module sources or resource archive in: {qml_root}")
-    import_root = str(qml_root)
+    import_root = qml_root.as_posix()
     if import_root not in engine.importPathList():
         engine.addImportPath(import_root)
 
@@ -79,12 +79,17 @@ class QmlLoadHandle(QObject):
         self._type_name = type_name
         self._asynchronous = asynchronous
         self._state = QmlLoadState.PENDING
+        self._failure_message: str | None = None
         self._component: QQmlComponent | None = None
         self._incubator: _LoadIncubator | None = None
 
     @property
     def state(self) -> QmlLoadState:
         return self._state
+
+    @property
+    def failure_message(self) -> str | None:
+        return self._failure_message
 
     @property
     def is_terminal(self) -> bool:
@@ -173,6 +178,7 @@ class QmlLoadHandle(QObject):
         return "; ".join(str(error) for error in errors) or "QML component failed to load"
 
     def _fail(self, message: str) -> None:
+        self._failure_message = message
         self._set_state(QmlLoadState.FAILED)
         self.failed.emit(message)
 

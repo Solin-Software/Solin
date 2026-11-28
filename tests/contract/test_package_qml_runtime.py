@@ -7,7 +7,7 @@ from scripts import package_qml_runtime
 from tests._paths import REPO_ROOT
 
 
-def test_app_qml_archive_exposes_the_versioned_modules(tmp_path):
+def test_app_qml_archive_exposes_the_named_modules(tmp_path):
     source_dir = REPO_ROOT / "src" / "solin" / "qml"
     archive = tmp_path / "output with spaces" / "solin-qml.rcc"
     package_qml_runtime.build_qml_archive(source_dir, archive)

@@ -55,7 +55,7 @@ def find_pyside6_rcc() -> str:
 
 
 def build_qml_archive(source_dir: Path, archive: Path) -> None:
-    """Package versioned module metadata and QML under Qt's default import root."""
+    """Package named modules and their QML under Qt's default import root."""
     source_dir = source_dir.resolve()
     archive = archive.resolve()
     if archive.is_relative_to(source_dir):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtQuickWidgets import QQuickWidget
 
+from solin.bootstrap import qml_runtime_verification
 from solin.ui.qml import loader
 
 
@@ -42,3 +43,12 @@ def test_synchronous_load_of_unknown_type_reports_failure():
     assert handle.state is loader.QmlLoadState.FAILED
     assert widget.rootObject() is None
     assert len(errors) == 1 and "MissingQmlType" in errors[0]
+    assert handle.failure_message == errors[0]
+
+
+def test_runtime_qualification_reports_a_missing_deployment(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(loader, "__file__", str(tmp_path / "ui/qml/loader.py"))
+
+    assert qml_runtime_verification.main(["--verify-qml-runtime"]) == 1
+
+    assert "No Solin QML module sources or resource archive" in capsys.readouterr().err

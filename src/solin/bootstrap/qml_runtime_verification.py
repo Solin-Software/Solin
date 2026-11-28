@@ -41,8 +41,6 @@ def _verify() -> dict[str, str]:
                 widget, type_name=name, module_uri=module, clear_color="transparent",
                 defer_load=deferred, **options,
             )
-            errors: list[str] = []
-            handle.failed.connect(errors.append)
             if deferred:
                 loop = QEventLoop()
                 timer = QTimer()
@@ -56,10 +54,9 @@ def _verify() -> dict[str, str]:
                     loop.exec()
                 timer.stop()
             if handle.state != QmlLoadState.READY or widget.rootObject() is None:
-                details = errors + [error.toString() for error in widget.errors()]
+                detail = handle.failure_message or "no QML error reported"
                 raise RuntimeError(
-                    f"{module}.{name} failed to load (state: {handle.state}): "
-                    f"{'; '.join(details) or 'no QML error reported'}"
+                    f"{module}.{name} failed to load (state: {handle.state}): {detail}"
                 )
             source = widget.source().toString()
             expected = f"qrc:/qt/qml/{module.replace('.', '/')}/{name}.qml"
